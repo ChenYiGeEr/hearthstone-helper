@@ -215,6 +215,13 @@ final class OverlayWindowManager {
             // on every log tick would cancel the hide that runs when the
             // match ends.
             if wanted, panel.isVisible, panelHiding[id] != true {
+                // Log ticks used to restart the alpha animation, which also
+                // flushed this non-key panel's hosting view. Keep the flush
+                // without starting another fade, so opponent rows are not
+                // left on the last composited frame.
+                panel.contentView?.needsLayout = true
+                panel.contentView?.needsDisplay = true
+                panel.contentView?.layoutSubtreeIfNeeded()
                 return
             }
             panelHiding[id] = false
@@ -227,7 +234,10 @@ final class OverlayWindowManager {
                 panel.orderFrontRegardless()
             }
             NSAnimationContext.runAnimationGroup({ context in
-                context.allowsImplicitAnimation = true
+                // Explicit alpha only. Implicit animation also fades SwiftUI
+                // insertions inside the hosting view, which leaves new
+                // opponent rows at opacity 0 for the rest of the match.
+                context.allowsImplicitAnimation = false
                 context.duration = 0.35
                 context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1.05)
                 panel.animator().alphaValue = 1
@@ -251,7 +261,7 @@ final class OverlayWindowManager {
             let epoch = (panelEpoch[id] ?? 0) + 1
             panelEpoch[id] = epoch
             NSAnimationContext.runAnimationGroup({ context in
-                context.allowsImplicitAnimation = true
+                context.allowsImplicitAnimation = false
                 context.duration = 0.22
                 context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 panel.animator().alphaValue = 0

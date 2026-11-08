@@ -282,15 +282,20 @@ private func zoneGroup(
         EmptyView()
     } else {
         OverlaySection(title: title, count: revealed + unknown, tint: tint, showsCount: showsCount) {
-            // Identity includes origin so an original and a generated copy of the
-            // same card are not collapsed into one ForEach row. Do not use an
-            // insertion transition here: live log updates are not inside
-            // withAnimation, so a fade-in stays at opacity 0 and the row never
-            // appears. Opponent reveals are almost all insertions; the friendly
-            // deck mostly removes rows, which is why only the left panel looked frozen.
-            ForEach(cards, id: \.overlayRowID) { card in
-                OverlayCardRow(card: card, trailing: (trailing ?? zoneTrailing)(card), store: store, hoveredCardID: hoveredCardID)
-                    .transition(.identity)
+            // Stable id is name + origin. Opponent reveals are insertions.
+            // A global animation transaction (deck-row withAnimation, or the
+            // panel's implicit fade) leaves those insertions at opacity 0.
+            // This list opts out. The friendly deck is not in zoneGroup, so
+            // its draw / shuffle offsets still run.
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(cards, id: \.overlayRowID) { card in
+                    OverlayCardRow(card: card, trailing: (trailing ?? zoneTrailing)(card), store: store, hoveredCardID: hoveredCardID)
+                        .transition(.identity)
+                }
+            }
+            .transaction { transaction in
+                transaction.animation = nil
+                transaction.disablesAnimations = true
             }
             if unknown > 0 {
                 HStack(spacing: 6) {
@@ -608,6 +613,7 @@ private struct DeckLiveRow: View {
     var body: some View {
         OverlayCardRow(card: card, trailing: trailing, store: store, hoveredCardID: $hoveredCardID)
             .offset(x: shownX)
+            .animation(HearthChrome.motion == .off ? nil : DeckRowMotion.animation, value: x)
             .onAppear { playShuffle() }
             .onChange(of: shuffleToken) { _, _ in playShuffle() }
             .onChange(of: incoming) { _, _ in playShuffle() }
@@ -619,10 +625,11 @@ private struct DeckLiveRow: View {
                 x = 0
             }
             .onChange(of: launch) { _, launch in
+                // Set the resting offset directly. A withAnimation here is
+                // global: the same log turn also inserts opponent rows, and
+                // those rows then fade in and stay invisible.
                 guard launch > 0 else { return }
-                withAnimation(DeckRowMotion.animation) {
-                    x = 0
-                }
+                x = 0
             }
     }
 
@@ -664,6 +671,7 @@ private struct DeckLeaveRow: View {
     var body: some View {
         OverlayCardRow(card: card, trailing: trailing, store: store, hoveredCardID: $hoveredCardID)
             .offset(x: x)
+            .animation(HearthChrome.motion == .off ? nil : DeckRowMotion.animation, value: x)
             .allowsHitTesting(false)
             .onAppear {
                 guard !started else { return }
@@ -673,9 +681,7 @@ private struct DeckLeaveRow: View {
                     return
                 }
                 let delay: TimeInterval = HearthChrome.motion == .flashy ? 0.5 : 0.26
-                withAnimation(DeckRowMotion.animation) {
-                    x = -DeckRowMotion.travel
-                }
+                x = -DeckRowMotion.travel
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                     MainActor.assumeIsolated {
                         onDone()

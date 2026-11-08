@@ -30,6 +30,8 @@ final class MatchStore {
     private var lastStatusKind: LogPipelineStatus?
 
     private static let opacityKey = "overlay-opacity-level"
+    private static let themeKey = "appearance-theme"
+    private static let languageKey = "ui-language"
 
     var overlayOpacityLevel: Int {
         didSet {
@@ -37,6 +39,26 @@ final class MatchStore {
             UserDefaults.standard.set(overlayOpacityLevel, forKey: Self.opacityKey)
         }
     }
+
+    /// 0 system, 1 light, 2 dark. Default stays dark, matching the original UI.
+    var appearanceChoice: Int {
+        didSet {
+            guard oldValue != appearanceChoice else { return }
+            UserDefaults.standard.set(appearanceChoice, forKey: Self.themeKey)
+            HearthChrome.applyAppAppearance(AppearanceChoice(rawValue: appearanceChoice) ?? .dark)
+        }
+    }
+
+    /// 0 中文, 1 English.
+    var interfaceLanguage: Int {
+        didSet {
+            guard oldValue != interfaceLanguage else { return }
+            UserDefaults.standard.set(interfaceLanguage, forKey: Self.languageKey)
+            HearthChrome.language = InterfaceLanguage(rawValue: interfaceLanguage) ?? .chinese
+        }
+    }
+
+    var chromeRevision: Int { appearanceChoice &* 10 &+ interfaceLanguage }
 
     /// Background tint for the overlay panels, by user-selected transparency level.
     var overlayBackgroundOpacity: Double {
@@ -107,7 +129,14 @@ final class MatchStore {
     }
 
     init() {
+        let themeRaw = UserDefaults.standard.object(forKey: Self.themeKey) as? Int ?? AppearanceChoice.dark.rawValue
+        let languageRaw = UserDefaults.standard.object(forKey: Self.languageKey) as? Int ?? InterfaceLanguage.chinese.rawValue
+        appearanceChoice = themeRaw
+        interfaceLanguage = languageRaw
         overlayOpacityLevel = UserDefaults.standard.object(forKey: Self.opacityKey) as? Int ?? 1
+        let choice = AppearanceChoice(rawValue: themeRaw) ?? .dark
+        HearthChrome.language = InterfaceLanguage(rawValue: languageRaw) ?? .chinese
+        HearthChrome.applyAppAppearance(choice)
 
         monitor.deckListResolver = { [weak self] code in
             guard let self else { return [] }

@@ -13,7 +13,7 @@ let package = Package(
         .target(
             name: "HearthstoneCore",
             path: "Sources/HearthstoneHelper",
-            exclude: ["DashboardView.swift", "HearthstoneHelperApp.swift", "CardDataStore.swift", "CardImageStore.swift", "CollectionBrowser.swift", "DeckLibrary.swift", "LifecycleAutomation.swift", "LogPipeline.swift", "MatchHistory.swift", "MatchStore.swift", "MirrorBridge.swift", "MirrorLiveStore.swift", "OverlayPanels.swift", "OverlayWindowManager.swift"],
+            exclude: ["DashboardView.swift", "HearthstoneHelperApp.swift", "CardDataStore.swift", "CardImageStore.swift", "CollectionBrowser.swift", "DeckLibrary.swift", "HearthChrome.swift", "LifecycleAutomation.swift", "LogPipeline.swift", "MatchHistory.swift", "MatchStore.swift", "MirrorBridge.swift", "MirrorLiveStore.swift", "MirrorMemory.swift", "OverlayPanels.swift", "OverlayWindowManager.swift"],
             sources: ["CardCatalog.swift", "DeckCode.swift", "DecksLog.swift", "MatchModels.swift", "MatchSessionTracker.swift", "PowerLogParser.swift"]
         ),
         .executableTarget(
@@ -27,6 +27,7 @@ let package = Package(
                 "CollectionBrowser.swift",
                 "DashboardView.swift",
                 "DeckLibrary.swift",
+                "HearthChrome.swift",
                 "HearthstoneHelperApp.swift",
                 "LifecycleAutomation.swift",
                 "LogPipeline.swift",

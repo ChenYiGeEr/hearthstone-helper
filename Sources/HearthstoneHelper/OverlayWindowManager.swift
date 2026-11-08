@@ -62,9 +62,7 @@ final class OverlayWindowManager {
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
 
-        let hostingView = NSHostingView(
-            rootView: content.preferredColorScheme(.dark)
-        )
+        let hostingView = NSHostingView(rootView: content)
         // the panel is freely resizable via its corner grip; the hosted SwiftUI
         // view must follow the window instead of pinning its preferred size
         hostingView.frame = NSRect(x: 0, y: 0, width: frame.width, height: frame.height)

@@ -19,6 +19,7 @@ struct CollectionBrowser: View {
     @State private var costs: Set<Int> = []
     @State private var mechanics: Set<String> = []
     @State private var page = 0
+    @Environment(\.hearthContext) private var hearthContext
 
     @State private var results: [String] = []
     @State private var chipCounts: [String: [(String, Int)]] = [:]
@@ -29,7 +30,8 @@ struct CollectionBrowser: View {
     private var catalog: CardCatalog? { store.cardData.catalog }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let _ = HearthChrome.install(hearthContext)
+        return VStack(alignment: .leading, spacing: 16) {
             header
             filterRows
             if results.isEmpty {
@@ -159,18 +161,20 @@ struct CollectionBrowser: View {
                 )
                 .frame(width: 4, height: 44)
             VStack(alignment: .leading, spacing: 4) {
-                Text(isStandard ? "卡牌图鉴 · 标准" : "卡牌图鉴 · 狂野")
+                Text(isStandard
+                     ? HearthChrome.L("卡牌图鉴 · 标准", "Collection · Standard")
+                     : HearthChrome.L("卡牌图鉴 · 狂野", "Collection · Wild"))
                     .font(.system(size: 27, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.hearthText)
                 HStack(spacing: 8) {
-                    Text("共 \(results.count) 张")
+                    Text(HearthChrome.L("共 \(results.count) 张", "\(results.count) cards"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.mist)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Color.inkLift, in: Capsule())
                     if collectionMode, let coll = store.live.collection {
-                        Text("粉尘 \(coll.dust) · 金币 \(coll.gold)")
+                        Text(HearthChrome.L("粉尘 \(coll.dust) · 金币 \(coll.gold)", "Dust \(coll.dust) · Gold \(coll.gold)"))
                             .font(.caption.monospacedDigit().weight(.semibold))
                             .foregroundStyle(Color.gold)
                     }
@@ -178,8 +182,8 @@ struct CollectionBrowser: View {
             }
             Spacer()
             Picker("", selection: $collectionMode) {
-                Text("全部").tag(false)
-                Text("我的收藏").tag(true)
+                Text(HearthChrome.L("全部", "All")).tag(false)
+                Text(HearthChrome.L("我的收藏", "Owned")).tag(true)
             }
             .pickerStyle(.segmented)
             .frame(width: 168)
@@ -188,7 +192,7 @@ struct CollectionBrowser: View {
                 recompute()
             }
             if isActiveFilter {
-                Button("重置筛选") {
+                Button(HearthChrome.L("重置筛选", "Reset")) {
                     withAnimation(.easeInOut(duration: 0.15)) {
                         selectedClass = nil
                         types = []
@@ -200,7 +204,7 @@ struct CollectionBrowser: View {
                     }
                 }
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(Color.ink)
+                .foregroundStyle(Color.onGold)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(Color.gold, in: Capsule())
@@ -223,14 +227,17 @@ struct CollectionBrowser: View {
                     .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(Color.gold)
             }
-            Text(waiting ? "卡牌数据尚未就绪" : "没有符合条件的卡")
+            Text(waiting ? HearthChrome.L("卡牌数据尚未就绪", "Card data isn't ready") : HearthChrome.L("没有符合条件的卡", "No cards match"))
                 .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-            Text(waiting ? "本地卡牌缓存就绪后，图鉴会显示在这里" : "试试放宽筛选，或切换标准 / 狂野")
+                .foregroundStyle(Color.hearthText)
+            Text(waiting
+                 ? HearthChrome.L("本地卡牌缓存就绪后，图鉴会显示在这里", "The collection shows up once the local card cache is ready.")
+                 : HearthChrome.L("试试放宽筛选，或切换标准 / 狂野", "Widen the filters, or switch Standard / Wild."))
                 .font(.caption)
                 .foregroundStyle(Color.mist)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .softAppear()
     }
 
     private var isActiveFilter: Bool {
@@ -242,7 +249,7 @@ struct CollectionBrowser: View {
         VStack(alignment: .leading, spacing: 6) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    FilterChipTinted(label: "全部职业", count: results.isEmpty ? 0 : classCounts.reduce(0) { $0 + $1.1 }, tint: .gold, isOn: selectedClass == nil) {
+                    FilterChipTinted(label: HearthChrome.L("全部职业", "All classes"), count: results.isEmpty ? 0 : classCounts.reduce(0) { $0 + $1.1 }, tint: .gold, isOn: selectedClass == nil) {
                         selectClass(nil)
                     }
                     ForEach(classCounts, id: \.0) { entry in
@@ -336,7 +343,7 @@ struct CollectionBrowser: View {
 
             Text("\(page + 1) / \(pageCount)")
                 .font(.caption.monospacedDigit().weight(.bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.hearthText)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
                 .background(Color.inkLift, in: Capsule())
@@ -376,9 +383,11 @@ private struct CollectionGrid: View {
     @State private var hoverIsOnRightSide = false
     @State private var gridMidX: CGFloat = 0
     @State private var loadingPulse = false
+    @Environment(\.hearthContext) private var hearthContext
 
     var body: some View {
-        ScrollView(.vertical) {
+        let _ = HearthChrome.install(hearthContext)
+        return ScrollView(.vertical) {
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 122), spacing: 12)],
                 spacing: 12
@@ -448,7 +457,7 @@ private struct CollectionGrid: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(isHovered ? Color.gold : Color.white.opacity(0.14), lineWidth: isHovered ? 2 : 1)
+                .strokeBorder(isHovered ? Color.gold : Color.hearthText.opacity(0.22), lineWidth: isHovered ? 2 : 1)
         )
         .scaleEffect(isHovered ? 1.04 : 1)
         .shadow(color: .black.opacity(isHovered ? 0.45 : 0.2), radius: isHovered ? 8 : 3, y: isHovered ? 4 : 2)
@@ -478,14 +487,16 @@ struct FilterChipTinted: View {
     let isOn: Bool
     let action: () -> Void
     @State private var hovering = false
+    @Environment(\.hearthContext) private var hearthContext
 
     var body: some View {
-        Button(action: action) {
+        let _ = HearthChrome.install(hearthContext)
+        return Button(action: action) {
             HStack(spacing: 5) {
                 Circle().fill(tint).frame(width: 5, height: 5)
-                Text(label)
+                Text(HearthChrome.phrase(label))
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(isOn || hovering ? 1 : 0.82))
+                    .foregroundStyle(Color.hearthText.opacity(isOn || hovering ? 1 : 0.82))
                 Text("\(count)")
                     .font(.system(size: 10, weight: .bold).monospacedDigit())
                     .foregroundStyle(isOn ? tint : Color.mist)
@@ -494,7 +505,7 @@ struct FilterChipTinted: View {
             .padding(.vertical, 4)
             .background(
                 Capsule().fill(
-                    isOn ? tint.opacity(0.32) : (hovering ? Color.white.opacity(0.07) : Color.inkDeep.opacity(0.55))
+                    isOn ? tint.opacity(0.32) : (hovering ? Color.hoverWash : Color.inkDeep.opacity(0.55))
                 )
             )
             .overlay(
@@ -503,16 +514,11 @@ struct FilterChipTinted: View {
                     lineWidth: 1
                 )
             )
+            .scaleEffect(isOn ? 1.05 : (hovering ? 1.03 : 1))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isOn)
+        .animation(.spring(response: 0.28, dampingFraction: 0.8), value: hovering)
     }
-}
-
-private extension Color {
-    static let gold = Color(red: 224 / 255, green: 176 / 255, blue: 96 / 255)
-    static let mint = Color(red: 112 / 255, green: 206 / 255, blue: 176 / 255)
-    static let mist = Color(red: 158 / 255, green: 176 / 255, blue: 188 / 255)
-    static let inkLift = Color(red: 20 / 255, green: 34 / 255, blue: 44 / 255)
-    static let inkDeep = Color(red: 8 / 255, green: 14 / 255, blue: 20 / 255)
 }

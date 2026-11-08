@@ -10,14 +10,14 @@ struct HearthstoneHelperApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("炉石助手", id: "main") {
+        WindowGroup(store.interfaceLanguage == InterfaceLanguage.english.rawValue ? "Hearthstone" : "炉石助手", id: "main") {
             DashboardView(store: store)
                 .frame(minWidth: 980, minHeight: 660)
         }
         .defaultSize(width: 1_180, height: 760)
         .windowResizability(.contentMinSize)
 
-        MenuBarExtra("炉石助手", systemImage: "shield.lefthalf.filled") {
+        MenuBarExtra(store.interfaceLanguage == InterfaceLanguage.english.rawValue ? "Hearthstone" : "炉石助手", systemImage: "shield.lefthalf.filled") {
             MenuBarContent(store: store)
         }
         .menuBarExtraStyle(.menu)
@@ -44,31 +44,50 @@ private struct MenuBarContent: View {
         Button {
             openWindow(id: "main")
         } label: {
-            Label("打开主窗口", systemImage: "macwindow")
+            Label(HearthChrome.L("打开主窗口", "Open main window"), systemImage: "macwindow")
         }
 
-        Toggle("左侧浮窗 · 对手记录", isOn: Binding(
+        Picker(HearthChrome.L("外观", "Appearance"), selection: Binding(
+            get: { store.appearanceChoice },
+            set: { store.appearanceChoice = $0 }
+        )) {
+            Text(HearthChrome.L("跟随系统", "System")).tag(AppearanceChoice.system.rawValue)
+            Text(HearthChrome.L("浅色", "Light")).tag(AppearanceChoice.light.rawValue)
+            Text(HearthChrome.L("深色", "Dark")).tag(AppearanceChoice.dark.rawValue)
+        }
+
+        Picker(HearthChrome.L("语言", "Language"), selection: Binding(
+            get: { store.interfaceLanguage },
+            set: { store.interfaceLanguage = $0 }
+        )) {
+            Text("中文").tag(InterfaceLanguage.chinese.rawValue)
+            Text("English").tag(InterfaceLanguage.english.rawValue)
+        }
+
+        Divider()
+
+        Toggle(HearthChrome.L("左侧浮窗 · 对手记录", "Left overlay · opponent"), isOn: Binding(
             get: { store.isOpponentOverlayVisible },
             set: { store.isOpponentOverlayVisible = $0 }
         ))
 
-        Toggle("右侧浮窗 · 己方牌库", isOn: Binding(
+        Toggle(HearthChrome.L("右侧浮窗 · 己方牌库", "Right overlay · your deck"), isOn: Binding(
             get: { store.isPlayerOverlayVisible },
             set: { store.isPlayerOverlayVisible = $0 }
         ))
 
-        Toggle("浮窗鼠标穿透（不挡游戏）", isOn: Binding(
+        Toggle(HearthChrome.L("浮窗鼠标穿透（不挡游戏）", "Click through overlays"), isOn: Binding(
             get: { store.isOverlayPassthrough },
             set: { store.isOverlayPassthrough = $0 }
         ))
 
-        Picker("浮窗透明度", selection: Binding(
+        Picker(HearthChrome.L("浮窗透明度", "Overlay opacity"), selection: Binding(
             get: { store.overlayOpacityLevel },
             set: { store.overlayOpacityLevel = $0 }
         )) {
-            Text("低 · 更透").tag(0)
-            Text("中").tag(1)
-            Text("高 · 更实").tag(2)
+            Text(HearthChrome.L("低 · 更透", "Low · clearer")).tag(0)
+            Text(HearthChrome.L("中", "Medium")).tag(1)
+            Text(HearthChrome.L("高 · 更实", "High · solid")).tag(2)
         }
 
         Divider()
@@ -76,18 +95,19 @@ private struct MenuBarContent: View {
         Button {
             NSApplication.shared.terminate(nil)
         } label: {
-            Label("退出炉石助手", systemImage: "power")
+            Label(HearthChrome.L("退出炉石助手", "Quit Hearthstone Helper"), systemImage: "power")
         }
         .keyboardShortcut("q", modifiers: [.command])
     }
 
     private var statusText: String {
+        let _ = store.chromeRevision
         switch store.status {
-        case .missingLogConfig: "状态：日志未启用"
-        case .notRunning: "状态：未登录（炉石未运行）"
-        case .loggedIn: "状态：已登录 · 等待对局"
-        case .live: "状态：游戏中"
-        case .finished: "状态：本局已结束"
+        case .missingLogConfig: HearthChrome.L("状态：日志未启用", "Status: logs off")
+        case .notRunning: HearthChrome.L("状态：未登录（炉石未运行）", "Status: signed out (Hearthstone isn't running)")
+        case .loggedIn: HearthChrome.L("状态：已登录 · 等待对局", "Status: signed in · waiting for a game")
+        case .live: HearthChrome.L("状态：游戏中", "Status: in game")
+        case .finished: HearthChrome.L("状态：本局已结束", "Status: match over")
         }
     }
 }

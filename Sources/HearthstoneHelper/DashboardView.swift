@@ -12,6 +12,17 @@ struct DashboardView: View {
     @State private var showsMoreFilters = true
     @State private var showsCollection = true
     @State private var isStandardFormat = true
+    @Environment(\.colorScheme) private var systemScheme
+
+    private var chromeContext: HearthContext {
+        let choice = AppearanceChoice(rawValue: store.appearanceChoice) ?? .dark
+        let language = InterfaceLanguage(rawValue: store.interfaceLanguage) ?? .chinese
+        return HearthChrome.context(
+            choice: choice,
+            systemIsLight: systemScheme == .light,
+            language: language
+        )
+    }
 
     /// Multi-dimension card filters (dimensions AND together, values OR).
     struct DeckCardFilters: Equatable {
@@ -98,20 +109,18 @@ struct DashboardView: View {
     }
 
     var body: some View {
-        ZStack {
+        let context = HearthChrome.install(chromeContext)
+        return ZStack {
             LinearGradient(
-                colors: [
-                    Color(red: 22 / 255, green: 34 / 255, blue: 44 / 255),
-                    Color.ink,
-                    Color(red: 7 / 255, green: 12 / 255, blue: 17 / 255)
-                ],
+                colors: [Color.inkTop, Color.ink, Color.inkBottom],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .ignoresSafeArea()
+            .animation(.easeInOut(duration: 0.45), value: context.isLight)
 
             RadialGradient(
-                colors: [Color.gold.opacity(0.16), Color.gold.opacity(0.04), .clear],
+                colors: [Color.gold.opacity(context.isLight ? 0.10 : 0.16), Color.gold.opacity(0.04), .clear],
                 center: UnitPoint(x: 0.12, y: 0),
                 startRadius: 12,
                 endRadius: 520
@@ -127,8 +136,9 @@ struct DashboardView: View {
                 detailArea
             }
         }
+        .environment(\.hearthContext, context)
         .tint(Color.gold)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme((AppearanceChoice(rawValue: store.appearanceChoice) ?? .dark).preferredScheme)
         .frame(minWidth: 1_020, minHeight: 660)
         .onAppear {
             if selectedDeckID == nil {
@@ -166,14 +176,14 @@ struct DashboardView: View {
                             )
                         Image(systemName: "shield.lefthalf.filled")
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Color.ink)
+                            .foregroundStyle(Color.onGold)
                     }
                     .frame(width: 28, height: 28)
                     .shadow(color: Color.gold.opacity(0.35), radius: 6, y: 2)
 
-                    Text("炉石助手")
+                    Text(HearthChrome.L("炉石助手", "Hearthstone"))
                         .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.hearthText)
                     Spacer(minLength: 0)
                 }
 
@@ -192,15 +202,15 @@ struct DashboardView: View {
             .padding(.top, 18)
             .padding(.bottom, 12)
 
-            Text("格式")
+            Text(HearthChrome.L("格式", "Format"))
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(Color.mist)
                 .padding(.horizontal, 18)
                 .padding(.bottom, 6)
 
             Picker("", selection: $isStandardFormat) {
-                Text("标准").tag(true)
-                Text("狂野").tag(false)
+                Text(HearthChrome.L("标准", "Standard")).tag(true)
+                Text(HearthChrome.L("狂野", "Wild")).tag(false)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
@@ -208,7 +218,9 @@ struct DashboardView: View {
 
             // 全卡入口
             Button {
-                showsCollection = true
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+                    showsCollection = true
+                }
             } label: {
                 HStack(spacing: 10) {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -219,11 +231,11 @@ struct DashboardView: View {
                         .overlay(
                             Image(systemName: "square.grid.2x2.fill")
                                 .font(.caption2.bold())
-                                .foregroundStyle(Color.ink)
+                                .foregroundStyle(Color.onGold)
                         )
-                    Text("卡牌图鉴")
+                    Text(HearthChrome.L("卡牌图鉴", "Collection"))
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.hearthText)
                     Spacer()
                     Image(systemName: showsCollection ? "chevron.down" : "chevron.right")
                         .font(.caption2.weight(.bold))
@@ -238,7 +250,7 @@ struct DashboardView: View {
             .padding(.bottom, 10)
 
             HStack(spacing: 8) {
-                Text("我的卡组")
+                Text(HearthChrome.L("我的卡组", "My decks"))
                     .font(.caption.weight(.bold))
                     .foregroundStyle(Color.mist)
                 Rectangle()
@@ -255,7 +267,10 @@ struct DashboardView: View {
                             Image(systemName: "rectangle.stack")
                                 .font(.title3)
                                 .foregroundStyle(Color.gold.opacity(0.9))
-                            Text("启动炉石并登录一次后，卡组会自动同步到这里")
+                            Text(HearthChrome.L(
+                                "启动炉石并登录一次后，卡组会自动同步到这里",
+                                "Launch Hearthstone and log in once. Decks sync here automatically."
+                            ))
                                 .font(.caption)
                                 .foregroundStyle(Color.mist)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -273,7 +288,7 @@ struct DashboardView: View {
                     } else {
                         ForEach(formatGroupedDecks, id: \.0) { group in
                             VStack(alignment: .leading, spacing: 6) {
-                                Text(group.0)
+                                Text(HearthChrome.phrase(group.0))
                                     .font(.caption2.weight(.bold))
                                     .foregroundStyle(Color.mist.opacity(0.9))
                                     .padding(.horizontal, 8)
@@ -286,6 +301,7 @@ struct DashboardView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 12)
+                .animation(.spring(response: 0.36, dampingFraction: 0.86), value: isStandardFormat)
             }
 
             Spacer(minLength: 0)
@@ -318,8 +334,10 @@ struct DashboardView: View {
         let classTint = Self.classColor(deck.className)
 
         return Button {
-            selectedDeckID = deck.id
-            showsCollection = false
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+                selectedDeckID = deck.id
+                showsCollection = false
+            }
         } label: {
             HStack(spacing: 10) {
                 RoundedRectangle(cornerRadius: 6)
@@ -334,15 +352,15 @@ struct DashboardView: View {
                     .overlay(
                         Text(deck.className.prefix(1))
                             .font(.caption2.bold())
-                            .foregroundStyle(deck.className == "牧师" ? Color.ink : .white)
+                            .foregroundStyle(deck.className == "牧师" ? Color.onGold : .white)
                     )
                     .shadow(color: classTint.opacity(0.5), radius: 3)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(deck.name)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.hearthText)
                         .lineLimit(1)
-                    Text("\(deck.formatName) · \(deck.className) · \(deck.cardCount) 张")
+                    Text("\(HearthChrome.phrase(deck.formatName)) · \(HearthChrome.phrase(deck.className)) · \(HearthChrome.L("\(deck.cardCount) 张", "\(deck.cardCount) cards"))")
                         .font(.caption2)
                         .foregroundStyle(Color.mist)
                 }
@@ -391,16 +409,19 @@ struct DashboardView: View {
     private var memoryBadge: some View {
         let stage = store.memory.stage
         if store.memory.inMatch, let c = store.memory.counts {
-            let text = "手 \(c.friendlyHand.map(String.init) ?? "-")/\(c.opponentHand.map(String.init) ?? "-") 库 \(c.friendlyDeck.map(String.init) ?? "-")/\(c.opponentDeck.map(String.init) ?? "-") 场 \(c.friendlyBoard.map(String.init) ?? "-")/\(c.opponentBoard.map(String.init) ?? "-")"
+            let text = HearthChrome.L(
+                "手 \(c.friendlyHand.map(String.init) ?? "-")/\(c.opponentHand.map(String.init) ?? "-") 库 \(c.friendlyDeck.map(String.init) ?? "-")/\(c.opponentDeck.map(String.init) ?? "-") 场 \(c.friendlyBoard.map(String.init) ?? "-")/\(c.opponentBoard.map(String.init) ?? "-")",
+                "H \(c.friendlyHand.map(String.init) ?? "-")/\(c.opponentHand.map(String.init) ?? "-") D \(c.friendlyDeck.map(String.init) ?? "-")/\(c.opponentDeck.map(String.init) ?? "-") B \(c.friendlyBoard.map(String.init) ?? "-")/\(c.opponentBoard.map(String.init) ?? "-")"
+            )
             Text(text)
                 .font(.caption2.weight(.semibold).monospacedDigit())
                 .foregroundStyle(Color.gold)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Color.gold.opacity(0.14), in: Capsule())
-                .help("内存直读（己方/对手）")
+                .help(HearthChrome.L("内存直读（己方/对手）", "Memory read (you / opponent)"))
         } else {
-            Text(stage)
+            Text(HearthChrome.phrase(stage))
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(Color.mist)
                 .padding(.horizontal, 8)
@@ -413,13 +434,15 @@ struct DashboardView: View {
         let text: String
         let tint: Color
         switch store.status {
-        case .missingLogConfig: text = "日志未启用"; tint = .mist
-        case .notRunning: text = "未登录"; tint = .mist
-        case .loggedIn: text = "已登录"; tint = .mint
-        case .live: text = "游戏中"; tint = .gold
-        case .finished: text = "本局已结束"; tint = .gold
+        case .missingLogConfig: text = HearthChrome.L("日志未启用", "Logs off"); tint = .mist
+        case .notRunning: text = HearthChrome.L("未登录", "Signed out"); tint = .mist
+        case .loggedIn: text = HearthChrome.L("已登录", "Signed in"); tint = .mint
+        case .live: text = HearthChrome.L("游戏中", "In game"); tint = .gold
+        case .finished: text = HearthChrome.L("本局已结束", "Match over"); tint = .gold
         }
+        let live = if case .live = store.status { true } else { false }
         return HStack(spacing: 6) {
+            LivePulse(active: live, tint: tint)
             Text(text)
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(tint)
@@ -427,7 +450,7 @@ struct DashboardView: View {
                 .padding(.vertical, 4)
                 .background(tint.opacity(0.14), in: Capsule())
             if case .missingLogConfig = store.status {
-                Button("启用日志") {
+                Button(HearthChrome.L("启用日志", "Enable logs")) {
                     guard !HearthstoneLogLocator.isLogConfigPresent() else { return }
                     try? HearthstoneLogLocator.writeLogConfig()
                 }
@@ -442,7 +465,7 @@ struct DashboardView: View {
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Text("助手行为")
+                Text(HearthChrome.L("助手行为", "Settings"))
                     .font(.caption.weight(.bold))
                     .foregroundStyle(Color.mist)
                 Rectangle()
@@ -450,32 +473,51 @@ struct DashboardView: View {
                     .frame(height: 1)
             }
 
-            Toggle("登录 macOS 时自动启动", isOn: Binding(
+            Picker(HearthChrome.L("外观", "Appearance"), selection: Binding(
+                get: { store.appearanceChoice },
+                set: { store.appearanceChoice = $0 }
+            )) {
+                Text(HearthChrome.L("跟随系统", "System")).tag(AppearanceChoice.system.rawValue)
+                Text(HearthChrome.L("浅色", "Light")).tag(AppearanceChoice.light.rawValue)
+                Text(HearthChrome.L("深色", "Dark")).tag(AppearanceChoice.dark.rawValue)
+            }
+            .pickerStyle(.menu)
+
+            Picker(HearthChrome.L("语言", "Language"), selection: Binding(
+                get: { store.interfaceLanguage },
+                set: { store.interfaceLanguage = $0 }
+            )) {
+                Text("中文").tag(InterfaceLanguage.chinese.rawValue)
+                Text("English").tag(InterfaceLanguage.english.rawValue)
+            }
+            .pickerStyle(.menu)
+
+            Toggle(HearthChrome.L("登录 macOS 时自动启动", "Launch at login"), isOn: Binding(
                 get: { store.lifecycle.launchesAtLogin },
                 set: { store.lifecycle.setLaunchesAtLogin($0) }
             ))
-            Toggle("炉石退出时自动退出助手", isOn: Binding(
+            Toggle(HearthChrome.L("炉石退出时自动退出助手", "Quit when Hearthstone quits"), isOn: Binding(
                 get: { store.lifecycle.quitsWithHearthstone },
                 set: { store.lifecycle.setQuitsWithHearthstone($0) }
             ))
-            Toggle("浮窗鼠标穿透（不挡游戏）", isOn: Binding(
+            Toggle(HearthChrome.L("浮窗鼠标穿透（不挡游戏）", "Click through overlays"), isOn: Binding(
                 get: { store.isOverlayPassthrough },
                 set: { store.isOverlayPassthrough = $0 }
             ))
 
-            Picker("浮窗透明度", selection: Binding(
+            Picker(HearthChrome.L("浮窗透明度", "Overlay opacity"), selection: Binding(
                 get: { store.overlayOpacityLevel },
                 set: { store.overlayOpacityLevel = $0 }
             )) {
-                Text("低").tag(0)
-                Text("中").tag(1)
-                Text("高").tag(2)
+                Text(HearthChrome.L("低", "Low")).tag(0)
+                Text(HearthChrome.L("中", "Medium")).tag(1)
+                Text(HearthChrome.L("高", "High")).tag(2)
             }
             .pickerStyle(.segmented)
         }
         .toggleStyle(.switch)
         .font(.caption)
-        .foregroundStyle(.white.opacity(0.92))
+        .foregroundStyle(Color.hearthText.opacity(0.92))
         .padding(14)
         .background(Color.inkDeep.opacity(0.42))
         .overlay(alignment: .top) {
@@ -489,10 +531,14 @@ struct DashboardView: View {
         Group {
             if showsCollection {
                 CollectionBrowser(store: store, isStandard: isStandardFormat)
+                    .transition(.opacity.combined(with: .offset(y: 12)))
             } else if let deck = store.deckLibrary.decks.first(where: { $0.id == selectedDeckID }) {
                 deckDetail(deck)
+                    .id(deck.id)
+                    .transition(.opacity.combined(with: .offset(x: 22)))
             } else {
                 emptyDetail
+                    .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -511,10 +557,13 @@ struct DashboardView: View {
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(Color.gold)
             }
-            Text("选择一个卡组查看战绩")
+            Text(HearthChrome.L("选择一个卡组查看战绩", "Select a deck to see its record"))
                 .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-            Text("卡组列表从炉石客户端日志自动同步；打完对局后这里会出现胜率统计")
+                .foregroundStyle(Color.hearthText)
+            Text(HearthChrome.L(
+                "卡组列表从炉石客户端日志自动同步；打完对局后这里会出现胜率统计",
+                "Decks sync from the Hearthstone log. Win rate shows up after you finish games."
+            ))
                 .font(.subheadline)
                 .foregroundStyle(Color.mist)
                 .multilineTextAlignment(.center)
@@ -522,6 +571,7 @@ struct DashboardView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .softAppear()
     }
 
     private func deckDetail(_ deck: DeckLibraryStore.DeckSummary) -> some View {
@@ -543,15 +593,15 @@ struct DashboardView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(deck.name)
                                 .font(.system(size: 27, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(Color.hearthText)
                             HStack(spacing: 6) {
-                                metaPill(deck.className, tint: Self.classColor(deck.className))
-                                metaPill(deck.formatName, tint: Color.mist)
-                                metaPill("\(deck.cardCount) 张", tint: Color.gold)
+                                metaPill(HearthChrome.phrase(deck.className), tint: Self.classColor(deck.className))
+                                metaPill(HearthChrome.phrase(deck.formatName), tint: Color.mist)
+                                metaPill(HearthChrome.L("\(deck.cardCount) 张", "\(deck.cardCount) cards"), tint: Color.gold)
                             }
                         }
                         Spacer()
-                        goldButton("复制卡组代码", systemImage: "doc.on.doc") {
+                        goldButton(HearthChrome.L("复制卡组代码", "Copy deck code"), systemImage: "doc.on.doc") {
                             guard !deck.code.isEmpty else { return }
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(deck.code, forType: .string)
@@ -583,7 +633,7 @@ struct DashboardView: View {
     private func metaPill(_ text: String, tint: Color) -> some View {
         Text(text)
             .font(.caption2.weight(.bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.hearthText)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(tint.opacity(0.18), in: Capsule())
@@ -594,7 +644,7 @@ struct DashboardView: View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
                 .font(.caption.weight(.bold))
-                .foregroundStyle(Color.ink)
+                .foregroundStyle(Color.onGold)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(
@@ -613,11 +663,12 @@ struct DashboardView: View {
     private func statsHeader(_ stats: MatchHistoryStore.DeckStats) -> some View {
         HStack(spacing: 24) {
             winRateRing(stats)
-            statBlock("总场次", "\(stats.games)")
-            statBlock("胜 / 负 / 平", "\(stats.wins) / \(stats.losses) / \(stats.ties)")
+            statBlock(HearthChrome.L("总场次", "Games"), "\(stats.games)")
+            statBlock(HearthChrome.L("胜 / 负 / 平", "W / L / T"), "\(stats.wins) / \(stats.losses) / \(stats.ties)")
             Spacer()
         }
         .modifier(PanelSurface(pad: 18))
+        .softAppear()
     }
 
     /// The win-rate ring is the deck page's visual anchor.
@@ -643,8 +694,9 @@ struct DashboardView: View {
             VStack(spacing: 0) {
                 Text(stats.games > 0 ? "\(Int(rate * 100))%" : "—")
                     .font(.system(size: 18, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-                Text("胜率")
+                    .foregroundStyle(Color.hearthText)
+                    .contentTransition(.numericText())
+                Text(HearthChrome.L("胜率", "Win rate"))
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(Color.mist)
             }
@@ -657,6 +709,7 @@ struct DashboardView: View {
             Text(value)
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(tint)
+                .contentTransition(.numericText())
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(Color.mist)
@@ -695,11 +748,14 @@ struct DashboardView: View {
         return Group {
             if !rows.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    sectionTitle("起手留牌（样本 \(matches.count) 局）")
+                    sectionTitle(HearthChrome.L("起手留牌（样本 \(matches.count) 局）", "Mulligan (\(matches.count) games)"))
                     ForEach(rows.prefix(10), id: \.name) { row in
                         mulliganRowView(row, deck: deck)
                     }
-                    Text("样本越多越可靠；同一张卡两个数字差距大 = 留牌倾向有信号")
+                    Text(HearthChrome.L(
+                        "样本越多越可靠；同一张卡两个数字差距大 = 留牌倾向有信号",
+                        "More games, clearer signal. A big gap between the two rates means the keep matters."
+                    ))
                         .font(.caption2)
                         .foregroundStyle(Color.mist.opacity(0.7))
                 }
@@ -717,14 +773,14 @@ struct DashboardView: View {
         return HStack(spacing: 10) {
             Text(catalog?.displayName(for: cardID ?? "") ?? row.name)
                 .font(.subheadline)
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.hearthText)
                 .lineLimit(1)
             Spacer()
             if row.kept > 0 {
-                statPair("留 \(row.kept)", keptRate)
+                statPair(HearthChrome.L("留 \(row.kept)", "Kept \(row.kept)"), keptRate)
             }
             if row.discarded > 0 {
-                statPair("换 \(row.discarded)", dropRate)
+                statPair(HearthChrome.L("换 \(row.discarded)", "Tossed \(row.discarded)"), dropRate)
             }
         }
         .padding(.horizontal, 8)
@@ -742,9 +798,9 @@ struct DashboardView: View {
         let classNames = orderedClasses(deck)
 
         return VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("面对各职业")
+            sectionTitle(HearthChrome.L("面对各职业", "Versus class"))
             if classNames.isEmpty {
-                Text("暂无对局数据")
+                Text(HearthChrome.L("暂无对局数据", "No games yet"))
                     .font(.caption)
                     .foregroundStyle(Color.mist)
             } else {
@@ -763,7 +819,7 @@ struct DashboardView: View {
                 .frame(width: 3, height: 14)
             Text(text)
                 .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.hearthText)
         }
     }
 
@@ -785,11 +841,11 @@ struct DashboardView: View {
                     .fill(Self.classColor(className))
                     .frame(width: 8, height: 8)
                     .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5))
-                Text(className)
+                Text(HearthChrome.phrase(className))
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.hearthText)
                 Spacer()
-                Text("\(stats.wins)胜 \(stats.losses)负")
+                Text(HearthChrome.L("\(stats.wins)胜 \(stats.losses)负", "\(stats.wins)W \(stats.losses)L"))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(Color.mist)
                 Text(stats.wins + stats.losses > 0 ? "\(Int(stats.winRate * 100))%" : "—")
@@ -818,9 +874,9 @@ struct DashboardView: View {
         let matches = store.history.recentMatches(deckID: deck.id)
 
         return VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("最近对局")
+            sectionTitle(HearthChrome.L("最近对局", "Recent games"))
             if matches.isEmpty {
-                Text("还没有已完成的对局")
+                Text(HearthChrome.L("还没有已完成的对局", "No finished games yet"))
                     .font(.caption)
                     .foregroundStyle(Color.mist)
             } else {
@@ -842,9 +898,9 @@ struct DashboardView: View {
                 }
             } label: {
                 HStack(spacing: 12) {
-                    Text(entry.result == .win ? "胜" : entry.result == .loss ? "负" : "平")
+                    Text(entry.result == .win ? HearthChrome.L("胜", "W") : entry.result == .loss ? HearthChrome.L("负", "L") : HearthChrome.L("平", "T"))
                         .font(.caption.bold())
-                        .foregroundStyle(Color.ink)
+                        .foregroundStyle(Color.onGold)
                         .frame(width: 26, height: 26)
                         .background(
                             entry.result == .win ? Color.mint :
@@ -856,15 +912,15 @@ struct DashboardView: View {
                             radius: 4,
                             y: 1
                         )
-                    Text("对阵 \(localizedOpponentClass(entry.opponentClass))")
+                    Text(HearthChrome.L("对阵 \(localizedOpponentClass(entry.opponentClass))", "vs \(HearthChrome.phrase(localizedOpponentClass(entry.opponentClass)))"))
                         .font(.subheadline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.hearthText)
                     Text(entry.deckName)
                         .font(.caption2)
                         .foregroundStyle(Color.mist)
                         .lineLimit(1)
                     if let format = entry.format {
-                        Text(format)
+                        Text(HearthChrome.phrase(format))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(Color.mist.opacity(0.9))
                             .padding(.horizontal, 5)
@@ -872,7 +928,7 @@ struct DashboardView: View {
                             .background(Color.mist.opacity(0.12), in: Capsule())
                     }
                     if entry.integrity != .complete {
-                        Text("部分记录")
+                        Text(HearthChrome.L("部分记录", "Partial"))
                             .font(.caption2)
                             .foregroundStyle(Color.mist)
                             .padding(.horizontal, 6)
@@ -915,9 +971,9 @@ struct DashboardView: View {
                     .filter { $0.origin == origin && !$0.isBoardOnly }
                     .sorted { $0.cost == $1.cost ? $0.name < $1.name : $0.cost < $1.cost }
                 if !cards.isEmpty {
-                    detailGroup("对手 · \(origin.title)", tint: origin == .original ? .mint : .mist) {
+                    detailGroup(HearthChrome.L("对手 · \(origin.title)", "Opponent · \(HearthChrome.phrase(origin.title))"), tint: origin == .original ? .mint : .mist) {
                         ForEach(cards) { card in
-                            detailCardRow(card, trailing: "回合 \(card.playedTurn)")
+                            detailCardRow(card, trailing: HearthChrome.L("回合 \(card.playedTurn)", "Turn \(card.playedTurn)"))
                         }
                     }
                 }
@@ -925,9 +981,9 @@ struct DashboardView: View {
 
             let played = entry.playerPlayedCards ?? []
             if !played.isEmpty {
-                detailGroup("己方 · 已打出", tint: .gold) {
+                detailGroup(HearthChrome.L("己方 · 已打出", "You · played"), tint: .gold) {
                     ForEach(played) { card in
-                        detailCardRow(card, trailing: "回合 \(card.playedTurn)")
+                        detailCardRow(card, trailing: HearthChrome.L("回合 \(card.playedTurn)", "Turn \(card.playedTurn)"))
                     }
                 }
             }
@@ -936,7 +992,7 @@ struct DashboardView: View {
                 $0.cost == $1.cost ? $0.name < $1.name : $0.cost < $1.cost
             }
             if !remaining.isEmpty {
-                detailGroup("己方 · 终局牌库", tint: .gold) {
+                detailGroup(HearthChrome.L("己方 · 终局牌库", "You · deck left"), tint: .gold) {
                     ForEach(remaining) { card in
                         detailCardRow(card, trailing: "×\(card.copies)")
                     }
@@ -944,7 +1000,7 @@ struct DashboardView: View {
             }
 
             if (entry.opponentCards ?? []).isEmpty && (entry.playerPlayedCards ?? []).isEmpty {
-                Text("本局没有保存卡牌快照")
+                Text(HearthChrome.L("本局没有保存卡牌快照", "No card snapshot was saved for this game"))
                     .font(.caption)
                     .foregroundStyle(Color.mist)
             }
@@ -959,7 +1015,7 @@ struct DashboardView: View {
     @ViewBuilder
     private func turnTimeline(_ entry: MatchHistoryEntry) -> some View {
         if let turns = entry.turns, !turns.isEmpty {
-            detailGroup("回合时间线", tint: .gold) {
+            detailGroup(HearthChrome.L("回合时间线", "Turn timeline"), tint: .gold) {
                 ForEach(turns, id: \.turn) { turn in
                     HStack(alignment: .top, spacing: 10) {
                         Text("T\(turn.turn)")
@@ -968,10 +1024,10 @@ struct DashboardView: View {
                             .frame(width: 26, alignment: .leading)
                         VStack(alignment: .leading, spacing: 3) {
                             if !turn.friendlyPlays.isEmpty {
-                                turnPlayRow("己", .mint, turn.friendlyPlays)
+                                turnPlayRow(HearthChrome.L("己", "You"), .mint, turn.friendlyPlays)
                             }
                             if !turn.opponentPlays.isEmpty {
-                                turnPlayRow("敌", .gold, turn.opponentPlays)
+                                turnPlayRow(HearthChrome.L("敌", "Opp"), .gold, turn.opponentPlays)
                             }
                         }
                     }
@@ -997,7 +1053,7 @@ struct DashboardView: View {
                 .joined(separator: "  ")
             )
             .font(.system(size: 11))
-            .foregroundStyle(.white.opacity(0.85))
+            .foregroundStyle(Color.hearthText.opacity(0.85))
             .lineLimit(2)
         }
     }
@@ -1018,7 +1074,7 @@ struct DashboardView: View {
             }
             if entries.reduce(0, { $0 + $1.count }) >= 30,
                let heroDbfID = opponentHeroDbfID(entry, catalog: catalog) {
-                goldButton("复制对手卡组代码", systemImage: "doc.on.doc") {
+                goldButton(HearthChrome.L("复制对手卡组代码", "Copy opponent code"), systemImage: "doc.on.doc") {
                     let code = DeckCode.encode(
                         heroDbfID: heroDbfID,
                         cards: entries,
@@ -1108,7 +1164,7 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(Color.black.opacity(isCombo ? 0.1 : 0.34))
             } else {
-                Color.inkDeep.opacity(0.4)
+                Color.cardStrip.opacity(0.55)
             }
         }
         .overlay(
@@ -1132,15 +1188,15 @@ struct DashboardView: View {
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("牌表")
+                Text(HearthChrome.L("牌表", "List"))
                     .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.hearthText)
                 Text("\(visible.count)/\(deck.cards.count)")
                     .font(.caption2.monospacedDigit().weight(.bold))
                     .foregroundStyle(Color.mist)
                 Spacer()
                 if filters.isActive {
-                    Button("重置筛选") {
+                    Button(HearthChrome.L("重置筛选", "Reset")) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 1.0)) {
                             filters = DeckCardFilters()
                         }
@@ -1164,9 +1220,9 @@ struct DashboardView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 4) {
                     if deck.cards.isEmpty {
-                        deckListEmpty("卡牌数据未就绪", systemImage: "square.dashed")
+                        deckListEmpty(HearthChrome.L("卡牌数据未就绪", "Card data isn't ready"), systemImage: "square.dashed")
                     } else if visible.isEmpty {
-                        deckListEmpty("没有符合条件的卡", systemImage: "line.3.horizontal.decrease.circle")
+                        deckListEmpty(HearthChrome.L("没有符合条件的卡", "No cards match"), systemImage: "line.3.horizontal.decrease.circle")
                     } else {
                         ForEach(visible, id: \.cardID) { card in
                             deckCardRow(cardID: card.cardID, count: card.count, hoveredCardID: $hoveredCardID)
@@ -1260,7 +1316,7 @@ struct DashboardView: View {
                 }
                 .padding(.top, 4)
             } label: {
-                Text("更多筛选（机制 / 归属 / 属性）")
+                Text(HearthChrome.L("更多筛选（机制 / 归属 / 属性）", "More filters (mechanic / class / tribe)"))
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(Color.mist)
             }
@@ -1302,14 +1358,16 @@ struct DashboardView: View {
         let isOn: Bool
         let action: () -> Void
         @State private var hovering = false
+        @Environment(\.hearthContext) private var hearthContext
 
         var body: some View {
-            Button(action: action) {
+            let _ = HearthChrome.install(hearthContext)
+            return Button(action: action) {
                 HStack(spacing: 5) {
                     Circle().fill(tint).frame(width: 5, height: 5)
-                    Text(label)
+                    Text(HearthChrome.phrase(label))
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(isOn || hovering ? 1 : 0.82))
+                        .foregroundStyle(Color.hearthText.opacity(isOn || hovering ? 1 : 0.82))
                     Text("\(count)")
                         .font(.system(size: 10, weight: .bold).monospacedDigit())
                         .foregroundStyle(isOn ? tint : Color.mist)
@@ -1317,7 +1375,7 @@ struct DashboardView: View {
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
                 .background(
-                    Capsule().fill(isOn ? tint.opacity(0.32) : (hovering ? Color.white.opacity(0.07) : Color.inkDeep.opacity(0.55)))
+                    Capsule().fill(isOn ? tint.opacity(0.32) : (hovering ? Color.hoverWash : Color.inkDeep.opacity(0.55)))
                 )
                 .overlay(
                     Capsule().strokeBorder(
@@ -1325,9 +1383,12 @@ struct DashboardView: View {
                         lineWidth: 1
                     )
                 )
+                .scaleEffect(isOn ? 1.05 : (hovering ? 1.03 : 1))
             }
             .buttonStyle(.plain)
             .onHover { hovering = $0 }
+            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isOn)
+            .animation(.spring(response: 0.28, dampingFraction: 0.8), value: hovering)
         }
     }
 
@@ -1352,7 +1413,7 @@ struct DashboardView: View {
                 if let comboNote {
                     Text(comboNote)
                         .font(.caption2.weight(.bold))
-                        .foregroundStyle(Color.ink)
+                        .foregroundStyle(Color.onGold)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Color.gold, in: Capsule())
@@ -1365,7 +1426,7 @@ struct DashboardView: View {
 
     private var comboNote: String? {
         guard let hoveredCardID else { return nil }
-        return "金色边框 = 与此卡有配合"
+        return HearthChrome.L("金色边框 = 与此卡有配合", "Gold border = combos with this card")
     }
 
     private func deckCardRow(
@@ -1405,7 +1466,7 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(Color.black.opacity(isCombo ? 0.1 : 0.34))
             } else {
-                Color.inkDeep.opacity(0.5)
+                Color.cardStrip.opacity(0.55)
             }
         }
         .overlay(
@@ -1445,12 +1506,14 @@ struct DashboardView: View {
     private struct ManaCurveView: View {
         let curve: [Int]
         @Binding var selection: Set<Int>
+        @Environment(\.hearthContext) private var hearthContext
 
         var body: some View {
             let peak = max(curve.max() ?? 1, 1)
+            let _ = HearthChrome.install(hearthContext)
 
             return VStack(alignment: .leading, spacing: 6) {
-                Text("费用曲线")
+                Text(HearthChrome.L("费用曲线", "Mana curve"))
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(Color.mist)
                 curveBars(peak: peak)
@@ -1492,6 +1555,7 @@ struct DashboardView: View {
                                     )
                                 )
                                 .frame(height: max(CGFloat(count) / CGFloat(peak) * 44, count > 0 ? 4 : 1))
+                                .animation(.spring(response: 0.35, dampingFraction: 0.82), value: count)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 3)
                                         .strokeBorder(Color.white.opacity(isSelected ? 0.9 : 0), lineWidth: 1)
@@ -1519,17 +1583,6 @@ private struct MulliganRow {
     var discardedWins = 0
 }
 
-private extension Color {
-    static let ink = Color(red: 12 / 255, green: 20 / 255, blue: 28 / 255)
-    static let inkLift = Color(red: 20 / 255, green: 34 / 255, blue: 44 / 255)
-    static let panel = Color(red: 32 / 255, green: 50 / 255, blue: 62 / 255)
-    static let line = Color(red: 126 / 255, green: 154 / 255, blue: 168 / 255).opacity(0.32)
-    static let gold = Color(red: 224 / 255, green: 176 / 255, blue: 96 / 255)
-    static let mint = Color(red: 112 / 255, green: 206 / 255, blue: 176 / 255)
-    static let mist = Color(red: 158 / 255, green: 176 / 255, blue: 188 / 255)
-    static let inkDeep = Color(red: 8 / 255, green: 14 / 255, blue: 20 / 255)
-}
-
 /// Selected and hovered row chrome shared by the sidebar and match list.
 private struct HoverHighlight: ViewModifier {
     var selected: Bool
@@ -1537,12 +1590,14 @@ private struct HoverHighlight: ViewModifier {
     var selectedFill: Color = .panel
     var selectedStroke: Color = Color.gold.opacity(0.72)
     @State private var hovering = false
+    @Environment(\.hearthContext) private var hearthContext
 
     func body(content: Content) -> some View {
-        content
+        let _ = HearthChrome.install(hearthContext)
+        return content
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(selected ? selectedFill : (hovering ? Color.white.opacity(0.055) : Color.clear))
+                    .fill(selected ? selectedFill : (hovering ? Color.hoverWash : Color.clear))
                     .animation(.easeOut(duration: 0.16), value: hovering)
                     .animation(.easeOut(duration: 0.16), value: selected)
             )
@@ -1562,9 +1617,11 @@ private struct HoverHighlight: ViewModifier {
 /// Inset panel used for win rate, matchup and history sections.
 private struct PanelSurface: ViewModifier {
     var pad: CGFloat = 16
+    @Environment(\.hearthContext) private var hearthContext
 
     func body(content: Content) -> some View {
-        content
+        let _ = HearthChrome.install(hearthContext)
+        return content
             .padding(pad)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
@@ -1578,7 +1635,7 @@ private struct PanelSurface: ViewModifier {
                             colors: [
                                 Color.gold.opacity(0.38),
                                 Color.line,
-                                Color.white.opacity(0.05)
+                                Color.hearthText.opacity(0.05)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing

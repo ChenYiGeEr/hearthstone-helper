@@ -26,8 +26,18 @@ func mergedSideStats(logStats: SideStats?, memoryInMatch: Bool, memoryCounts: Mi
 struct OpponentOverlayPanel: View {
     let store: MatchStore
     @State private var hoveredCardID: String?
+    @Environment(\.colorScheme) private var systemScheme
+
+    private var chromeContext: HearthContext {
+        HearthChrome.context(
+            choice: AppearanceChoice(rawValue: store.appearanceChoice) ?? .dark,
+            systemIsLight: systemScheme == .light,
+            language: InterfaceLanguage(rawValue: store.interfaceLanguage) ?? .chinese
+        )
+    }
 
     var body: some View {
+        let context = HearthChrome.install(chromeContext)
         let match = store.match
         let friendlyClass = store.deckLibrary.decks
             .first { $0.id == match.playerDeckID }?.className ?? ""
@@ -38,7 +48,7 @@ struct OpponentOverlayPanel: View {
 
         let rankText: String? = {
             guard let league = store.live.opponent?.leagueID else { return nil }
-            let name = MirrorLiveStore.leagueName(league) ?? "?"
+            let name = HearthChrome.league(MirrorLiveStore.leagueName(league) ?? "?")
             return league == 5 ? name : "\(name) ★\(store.live.opponent?.stars ?? 0)"
         }()
 
@@ -51,9 +61,9 @@ struct OpponentOverlayPanel: View {
         )
         let previousEncounter = previousEncounter(for: match)
 
-        OverlayPanelShell(
-            title: "对手记录",
-            subtitle: [match.opponentClass, rankText].compactMap { $0 }.joined(separator: " · "),
+        return OverlayPanelShell(
+            title: HearthChrome.L("对手记录", "Opponent"),
+            subtitle: [HearthChrome.phrase(match.opponentClass), rankText].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
             accent: .mintSoft,
             store: store,
             hoveredCardID: $hoveredCardID
@@ -77,7 +87,7 @@ struct OpponentOverlayPanel: View {
                 // counts come from the real zone totals (hidden cards included);
                 // unrevealed cards show up as "未知卡牌" placeholders
                 zoneGroup(
-                    "牌库中",
+                    HearthChrome.L("牌库中", "In deck"),
                     tint: .goldSoft,
                     total: mergedOpponentStats?.deckCount,
                     cards: match.opponentCards.filter { $0.currentZone == "DECK" },
@@ -85,7 +95,7 @@ struct OpponentOverlayPanel: View {
                     hoveredCardID: $hoveredCardID
                 )
                 zoneGroup(
-                    "手牌中",
+                    HearthChrome.L("手牌中", "In hand"),
                     tint: .mintSoft,
                     total: mergedOpponentStats?.handCount,
                     cards: match.opponentCards.filter { $0.currentZone == "HAND" },
@@ -93,7 +103,7 @@ struct OpponentOverlayPanel: View {
                     hoveredCardID: $hoveredCardID
                 )
                 zoneGroup(
-                    "其他",
+                    HearthChrome.L("其他", "Other"),
                     tint: .mistSoft,
                     total: nil,
                     cards: match.opponentCards.filter { card in
@@ -104,6 +114,9 @@ struct OpponentOverlayPanel: View {
                 )
             }
         }
+        .environment(\.hearthContext, context)
+        .preferredColorScheme((AppearanceChoice(rawValue: store.appearanceChoice) ?? .dark).preferredScheme)
+        .softAppear()
     }
 }
 
@@ -111,8 +124,18 @@ struct OpponentOverlayPanel: View {
 struct PlayerOverlayPanel: View {
     let store: MatchStore
     @State private var hoveredCardID: String?
+    @Environment(\.colorScheme) private var systemScheme
+
+    private var chromeContext: HearthContext {
+        HearthChrome.context(
+            choice: AppearanceChoice(rawValue: store.appearanceChoice) ?? .dark,
+            systemIsLight: systemScheme == .light,
+            language: InterfaceLanguage(rawValue: store.interfaceLanguage) ?? .chinese
+        )
+    }
 
     var body: some View {
+        let context = HearthChrome.install(chromeContext)
         let match = store.match
         let friendlyClass = store.deckLibrary.decks
             .first { $0.id == match.playerDeckID }?.className ?? ""
@@ -128,8 +151,8 @@ struct PlayerOverlayPanel: View {
             isOpponent: false
         )
 
-        OverlayPanelShell(
-            title: "己方牌库",
+        return OverlayPanelShell(
+            title: HearthChrome.L("己方牌库", "Your deck"),
             subtitle: match.playerDeckName,
             accent: .goldSoft,
             store: store,
@@ -146,7 +169,7 @@ struct PlayerOverlayPanel: View {
 
             OverlayScrollView {
                 zoneGroup(
-                    "牌库中",
+                    HearthChrome.L("牌库中", "In deck"),
                     tint: .goldSoft,
                     total: mergedFriendlyStats?.deckCount,
                     cards: match.playerRemainingCards.sorted {
@@ -158,13 +181,13 @@ struct PlayerOverlayPanel: View {
                     trailing: { card in
                         // 洗入的外来牌与卡组原有的 30 张区分标注
                         var parts: [String] = []
-                        if card.origin != .original { parts.append("洗入") }
+                        if card.origin != .original { parts.append(HearthChrome.phrase("洗入")) }
                         if card.copies > 1 { parts.append("×\(card.copies)") }
                         return parts.isEmpty ? nil : parts.joined(separator: " ")
                     }
                 )
                 zoneGroup(
-                    "手牌中",
+                    HearthChrome.L("手牌中", "In hand"),
                     tint: .mintSoft,
                     total: mergedFriendlyStats?.handCount,
                     cards: store.playerHandCardsResolved.sorted {
@@ -175,7 +198,7 @@ struct PlayerOverlayPanel: View {
                     animated: true
                 )
                 zoneGroup(
-                    "已打出",
+                    HearthChrome.L("已打出", "Played"),
                     tint: .mistSoft,
                     cards: match.playerPlayedCards.reversed(),
                     store: store,
@@ -183,6 +206,9 @@ struct PlayerOverlayPanel: View {
                 )
             }
         }
+        .environment(\.hearthContext, context)
+        .preferredColorScheme((AppearanceChoice(rawValue: store.appearanceChoice) ?? .dark).preferredScheme)
+        .softAppear()
     }
 
     /// "对阵 恶魔猎手 66.7% 2/1" from the local history of this exact deck.
@@ -191,7 +217,7 @@ struct PlayerOverlayPanel: View {
         let stats = store.history.stats(againstClass: match.opponentClass, deckID: match.playerDeckID)
         if stats.wins + stats.losses > 0 {
             HStack(spacing: 6) {
-                Text("对阵 \(match.opponentClass)")
+                Text(HearthChrome.L("对阵 \(HearthChrome.phrase(match.opponentClass))", "vs \(HearthChrome.phrase(match.opponentClass))"))
                     .foregroundStyle(Color.mistSoft)
                 Text("\(Int(stats.winRate * 100))%")
                     .foregroundStyle(stats.winRate >= 0.5 ? Color.mintSoft : Color.goldSoft)
@@ -238,7 +264,7 @@ private func zoneGroup(
     let unknown = max((total ?? revealed) - revealed, 0)
     OverlaySection(title: title, count: revealed + unknown, tint: tint) {
         if cards.isEmpty && unknown == 0 {
-            OverlayEmpty(text: "暂无")
+            OverlayEmpty(text: HearthChrome.L("暂无", "None"))
         } else {
             if animated {
                 // Stable rowKey identity lets SwiftUI diff snapshots (fresh
@@ -265,8 +291,8 @@ private func zoneGroup(
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(Color.mistSoft)
                         .frame(width: 19, height: 19)
-                        .background(Color.white.opacity(0.06), in: Circle())
-                    Text("未知卡牌")
+                        .background(Color.hearthText.opacity(0.08), in: Circle())
+                    Text(HearthChrome.L("未知卡牌", "Unknown card"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.mistSoft)
                     Spacer()
@@ -287,9 +313,9 @@ private func zoneGroup(
 }
 
 private func zoneTrailing(_ card: TrackedCard) -> String? {
-    if card.playedTurn > 0 {
-        return "回合 \(card.playedTurn)"
-    }
+        if card.playedTurn > 0 {
+            return HearthChrome.L("回合 \(card.playedTurn)", "Turn \(card.playedTurn)")
+        }
     if card.copies > 1 {
         return "×\(card.copies)"
     }
@@ -312,11 +338,14 @@ private extension OpponentOverlayPanel {
     /// "再遇"只留日期和胜负。历史里的 deckName 是你自己的卡组，不能写成他的。
     @ViewBuilder
     func rematchNote(_ previous: MatchHistoryEntry) -> some View {
-        let outcome = previous.result == .win ? "胜" : previous.result == .loss ? "负" : "平"
+        let won = previous.result == .win
+        let outcomeZh = won ? "胜" : previous.result == .loss ? "负" : "平"
+        let outcomeEn = won ? "W" : previous.result == .loss ? "L" : "T"
+        let day = previous.startedAt.formatted(.dateTime.month().day())
         HStack(spacing: 5) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 9, weight: .bold))
-            Text("再遇 \(previous.startedAt.formatted(.dateTime.month().day()))：你\(outcome)")
+            Text(HearthChrome.L("再遇 \(day)：你\(outcomeZh)", "Rematch \(day): you \(outcomeEn)"))
                 .lineLimit(1)
         }
         .font(.caption2.weight(.semibold))
@@ -332,7 +361,7 @@ private extension OpponentOverlayPanel {
     func previousSeenSection(_ previous: MatchHistoryEntry) -> some View {
         let cards = previousSeenCards(previous)
         if !cards.isEmpty {
-            OverlaySection(title: "上次", count: cards.reduce(0) { $0 + $1.copies }, tint: .mistSoft) {
+            OverlaySection(title: HearthChrome.L("上次", "Last time"), count: cards.reduce(0) { $0 + $1.copies }, tint: .mistSoft) {
                 ForEach(cards, id: \.rowKey) { card in
                     OverlayCardRow(
                         card: card,
@@ -382,7 +411,7 @@ private extension OpponentOverlayPanel {
         let count = match.opponentStats?.secrets ?? 0
         if count > 0, let catalog = store.cardData.catalog {
             let pool = catalog.secretCardIDs(classLabel: match.opponentClass)
-            OverlaySection(title: "奥秘 ×\(count)", count: pool.count, tint: .goldSoft) {
+            OverlaySection(title: HearthChrome.L("奥秘 ×\(count)", "Secrets ×\(count)"), count: pool.count, tint: .goldSoft) {
                 ForEach(pool, id: \.self) { cardID in
                     let triggered = match.revealedSecrets.contains(cardID)
                     HStack(spacing: 8) {
@@ -440,9 +469,11 @@ private struct OverlayPanelShell<Content: View>: View {
     let store: MatchStore
     @Binding var hoveredCardID: String?
     @ViewBuilder let content: Content
+    @Environment(\.hearthContext) private var hearthContext
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let _ = HearthChrome.install(hearthContext)
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 8) {
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(accent)
@@ -451,7 +482,7 @@ private struct OverlayPanelShell<Content: View>: View {
                     Text(title)
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .kerning(-0.2)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.hearthText)
                     Text(subtitle)
                         .font(.caption2)
                         .foregroundStyle(Color.mistSoft)
@@ -463,7 +494,7 @@ private struct OverlayPanelShell<Content: View>: View {
                     .foregroundStyle(Color.mistSoft)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.06), in: Capsule())
+                    .background(Color.hearthText.opacity(0.08), in: Capsule())
                 Circle()
                     .fill(accent)
                     .frame(width: 7, height: 7)
@@ -554,27 +585,29 @@ private struct SideStatsBar: View {
     var lethal: Int? = nil
     /// True when the opponent's health is within the lethal estimate.
     var healthThreatened: Bool = false
+    @Environment(\.hearthContext) private var hearthContext
 
     private static let turnLength: TimeInterval = 75
 
     var body: some View {
-        HStack(spacing: 10) {
-            item("攻", stats?.boardATK, tint: .goldSoft)
+        let _ = HearthChrome.install(hearthContext)
+        return HStack(spacing: 10) {
+            item(HearthChrome.L("攻", "Atk"), stats?.boardATK, tint: .goldSoft)
             item(
-                "血",
+                HearthChrome.L("血", "HP"),
                 stats?.currentHealth,
                 tint: healthThreatened ? Color(red: 0.9, green: 0.25, blue: 0.2) : .mintSoft,
                 suffix: healthThreatened ? " 💀" : nil
             )
-            item("手", stats?.handCount, tint: .mistSoft)
+            item(HearthChrome.L("手", "Hand"), stats?.handCount, tint: .mistSoft)
             item(
-                "库",
+                HearthChrome.L("库", "Deck"),
                 stats?.deckCount,
                 tint: (stats?.deckCount ?? 99) <= 3 ? Color(red: 0.9, green: 0.6, blue: 0.2) : .mistSoft,
                 suffix: (stats?.deckCount ?? 99) <= 3 ? " ⚠" : nil
             )
             if let lethal {
-                item("杀", lethal, tint: Color(red: 0.9, green: 0.25, blue: 0.2))
+                item(HearthChrome.L("杀", "Kill"), lethal, tint: Color(red: 0.9, green: 0.25, blue: 0.2))
             }
             Spacer()
             if showsCountdown {
@@ -584,17 +617,19 @@ private struct SideStatsBar: View {
         .font(.system(size: 11, weight: .bold).monospacedDigit())
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(Color.inkDeep.opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                .strokeBorder(Color.hearthText.opacity(0.12), lineWidth: 1)
         )
     }
 
     private func item(_ label: String, _ value: Int?, tint: Color, suffix: String? = nil) -> some View {
         HStack(spacing: 3) {
             Text(label).foregroundStyle(tint)
-            Text((value.map(String.init) ?? "—") + (suffix ?? "")).foregroundStyle(.white)
+            Text((value.map(String.init) ?? "—") + (suffix ?? ""))
+                .foregroundStyle(Color.hearthText)
+                .contentTransition(.numericText())
         }
     }
 
@@ -617,9 +652,11 @@ private struct OverlaySection<Content: View>: View {
     let tint: Color
     @State private var isExpanded = true
     @ViewBuilder let content: Content
+    @Environment(\.hearthContext) private var hearthContext
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let _ = HearthChrome.install(hearthContext)
+        return VStack(alignment: .leading, spacing: 6) {
             Button {
                 withAnimation(.spring(response: 0.32, dampingFraction: 1.0)) {
                     isExpanded.toggle()
@@ -631,16 +668,16 @@ private struct OverlaySection<Content: View>: View {
                         .frame(width: 3, height: 12)
                     Text(title)
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.hearthText)
                     Spacer()
                     Text("(\(count))")
                         .font(.caption.monospacedDigit().weight(.bold))
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(Color.hearthText.opacity(0.9))
                         .contentTransition(.numericText())
                         .animation(.spring(response: 0.35, dampingFraction: 1.0), value: count)
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(Color.hearthText.opacity(0.75))
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -679,13 +716,15 @@ private struct OverlayCardRow: View {
     let store: MatchStore
     @Binding var hoveredCardID: String?
     @State private var hovering = false
+    @Environment(\.hearthContext) private var hearthContext
 
     private var lookupID: String {
         card.cardID ?? card.name
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        let _ = HearthChrome.install(hearthContext)
+        return HStack(spacing: 8) {
             Text("\(card.cost)")
                 .font(.system(size: 10, weight: .heavy).monospacedDigit())
                 .foregroundStyle(.white)
@@ -739,6 +778,7 @@ private struct OverlayCardRow: View {
                 hoveredCardID = nil
             }
         }
+        .animation(.easeOut(duration: 0.16), value: hovering)
     }
 
     /// The row borrows its card's own name-band art; a dark wash keeps the
@@ -751,7 +791,7 @@ private struct OverlayCardRow: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(Color.black.opacity(0.34))
         } else {
-            Color.inkDeep.opacity(0.5)
+            Color.cardStrip.opacity(0.72)
         }
     }
 
@@ -768,9 +808,11 @@ private struct OverlayCardRow: View {
 
 private struct OverlayEmpty: View {
     let text: String
+    @Environment(\.hearthContext) private var hearthContext
 
     var body: some View {
-        HStack(spacing: 6) {
+        let _ = HearthChrome.install(hearthContext)
+        return HStack(spacing: 6) {
             Image(systemName: "square.dashed")
                 .font(.system(size: 10, weight: .semibold))
             Text(text)
@@ -781,12 +823,4 @@ private struct OverlayEmpty: View {
         .padding(.vertical, 4)
         .padding(.horizontal, 4)
     }
-}
-
-private extension Color {
-    static let inkDeep = Color(red: 8 / 255, green: 14 / 255, blue: 20 / 255)
-    static let goldSoft = Color(red: 224 / 255, green: 176 / 255, blue: 96 / 255)
-    static let mintSoft = Color(red: 112 / 255, green: 206 / 255, blue: 176 / 255)
-    static let mistSoft = Color(red: 158 / 255, green: 176 / 255, blue: 188 / 255)
-    static let lineSoft = Color(red: 126 / 255, green: 154 / 255, blue: 168 / 255).opacity(0.38)
 }

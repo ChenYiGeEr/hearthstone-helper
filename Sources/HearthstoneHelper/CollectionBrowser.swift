@@ -513,6 +513,7 @@ private extension Color {
     static let gold = Color(red: 224 / 255, green: 176 / 255, blue: 96 / 255)
     static let mint = Color(red: 112 / 255, green: 206 / 255, blue: 176 / 255)
     static let mist = Color(red: 158 / 255, green: 176 / 255, blue: 188 / 255)
+    static let ink = Color(red: 12 / 255, green: 20 / 255, blue: 28 / 255)
     static let inkLift = Color(red: 20 / 255, green: 34 / 255, blue: 44 / 255)
     static let inkDeep = Color(red: 8 / 255, green: 14 / 255, blue: 20 / 255)
 }

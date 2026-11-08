@@ -29,6 +29,10 @@ final class OverlayWindowManager {
     /// True while a hide animation is waiting to orderOut. A repeat hide must
     /// not bump the epoch, or that orderOut would be dropped.
     private var panelHiding: [PanelID: Bool] = [:]
+    /// `syncFromStore` during `MatchStore.init` runs inside SwiftUI's update.
+    /// Showing a panel there flushes the hosting view and aborts
+    /// (`setting value during update`). One deferred sync covers the burst.
+    private var syncScheduled = false
 
     func install(store: MatchStore) {
         guard self.store == nil else { return }
@@ -43,13 +47,19 @@ final class OverlayWindowManager {
             content: PlayerOverlayPanel(store: store)
         )
         observeStore()
-        syncPanels()
+        syncFromStore()
     }
 
-    /// Called when pipeline status changes, including from the log callback,
-    /// so a match-end hide does not wait on the next observation turn.
+    /// Show or hide after the current SwiftUI update. A `.live` publish from
+    /// `MatchStore.init` (Hearthstone already in a game) must not layout the
+    /// hosting view on that same turn.
     func syncFromStore() {
-        syncPanels()
+        guard !syncScheduled else { return }
+        syncScheduled = true
+        Task { @MainActor in
+            self.syncScheduled = false
+            self.syncPanels()
+        }
     }
 
     // MARK: - Panel lifecycle
@@ -215,13 +225,11 @@ final class OverlayWindowManager {
             // on every log tick would cancel the hide that runs when the
             // match ends.
             if wanted, panel.isVisible, panelHiding[id] != true {
-                // Log ticks used to restart the alpha animation, which also
-                // flushed this non-key panel's hosting view. Keep the flush
-                // without starting another fade, so opponent rows are not
-                // left on the last composited frame.
+                // Mark dirty without flushing. layoutSubtreeIfNeeded here
+                // re-enters the SwiftUI graph and aborts if a log publish
+                // landed inside an update.
                 panel.contentView?.needsLayout = true
                 panel.contentView?.needsDisplay = true
-                panel.contentView?.layoutSubtreeIfNeeded()
                 return
             }
             panelHiding[id] = false

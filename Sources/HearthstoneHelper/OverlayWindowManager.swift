@@ -189,7 +189,7 @@ final class OverlayWindowManager {
     /// In-match only. Every other pipeline state is the main, out-of-match UI.
     private func overlaysAllowed(_ status: LogPipelineStatus) -> Bool {
         switch status {
-        case .live:
+        case .live, .logStalled:
             return true
         case .missingLogConfig, .notRunning, .loggedIn, .finished:
             return false
@@ -225,11 +225,13 @@ final class OverlayWindowManager {
             // on every log tick would cancel the hide that runs when the
             // match ends.
             if wanted, panel.isVisible, panelHiding[id] != true {
-                // Mark dirty without flushing. layoutSubtreeIfNeeded here
-                // re-enters the SwiftUI graph and aborts if a log publish
-                // landed inside an update.
+                // syncPanels only runs on a later main-actor turn, so this
+                // flush is not the launch-time "setting value during update"
+                // path. needsDisplay alone does not push a new opponent list
+                // through a non-key NSHostingView.
                 panel.contentView?.needsLayout = true
                 panel.contentView?.needsDisplay = true
+                panel.contentView?.layoutSubtreeIfNeeded()
                 return
             }
             panelHiding[id] = false

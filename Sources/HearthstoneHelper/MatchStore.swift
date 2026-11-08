@@ -192,6 +192,9 @@ final class MatchStore {
         HearthChrome.isLight = choice == .light
         syncLayoutVisibility()
 
+        monitor.memoryInMatch = { [weak self] in
+            self?.memory.inMatch ?? false
+        }
         monitor.deckListResolver = { [weak self] code in
             guard let self else { return [] }
             // the mirror's selected deck is authoritative while a game runs
@@ -293,6 +296,7 @@ final class MatchStore {
         case .notRunning: return 1
         case .loggedIn: return 2
         case .live: return 3
+        case .logStalled: return 5
         case .finished: return 4
         case nil: return -1
         }

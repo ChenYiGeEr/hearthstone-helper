@@ -71,6 +71,16 @@ struct OpponentOverlayPanel: View {
                 healthThreatened: threatened && (mergedOpponentStats?.currentHealth ?? 30) > 0
             )
 
+            if case .logStalled = store.status {
+                Text(HearthChrome.L(
+                    "权力日志已停写，对手记录停在最后一次写入。",
+                    "Power.log stopped. Opponent cards are frozen at the last write."
+                ))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.goldSoft)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let previousEncounter {
                 rematchNote(previousEncounter)
             }

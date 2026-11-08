@@ -465,6 +465,7 @@ struct DashboardView: View {
         case .notRunning: text = HearthChrome.L("未登录", "Signed out"); tint = .mist
         case .loggedIn: text = HearthChrome.L("已登录", "Signed in"); tint = .mint
         case .live: text = HearthChrome.L("游戏中", "In game"); tint = .gold
+        case .logStalled: text = HearthChrome.L("权力日志已停", "Power log stalled"); tint = .gold
         case .finished: text = HearthChrome.L("本局已结束", "Match over"); tint = .gold
         }
         let live = if case .live = store.status { true } else { false }

@@ -129,6 +129,7 @@ private struct MenuBarContent: View {
         case .notRunning: return HearthChrome.L("状态：未登录（炉石未运行）", "Status: signed out (Hearthstone isn't running)")
         case .loggedIn: return HearthChrome.L("状态：已登录 · 等待对局", "Status: signed in · waiting for a game")
         case .live: return HearthChrome.L("状态：游戏中", "Status: in game")
+        case .logStalled: return HearthChrome.L("状态：对局中，但权力日志已停写", "Status: in a match, but Power.log stopped")
         case .finished: return HearthChrome.L("状态：本局已结束", "Status: match over")
         }
     }

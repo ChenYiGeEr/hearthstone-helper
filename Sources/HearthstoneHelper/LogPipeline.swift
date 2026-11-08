@@ -12,14 +12,17 @@ enum LogPipelineStatus: Equatable {
     case notRunning
     /// Client is running but no match has been played in its current session.
     case loggedIn
-    /// A match is being recorded.
+    /// A match is being recorded from a growing Power.log.
     case live(MatchRecord)
+    /// Memory still sees a match, but Power.log has stopped growing, so
+    /// opponent reveals cannot advance. Not a healthy live feed.
+    case logStalled(MatchRecord)
     /// The recorded match reached its end (STATE=COMPLETE).
     case finished(MatchRecord)
 
     var match: MatchRecord? {
         switch self {
-        case let .live(record), let .finished(record): record
+        case let .live(record), let .logStalled(record), let .finished(record): record
         default: nil
         }
     }
@@ -42,42 +45,50 @@ enum HearthstoneLogLocator {
         ]
     }
 
-    /// Newest Power.log across all session folders; a new session after client
-    /// restart yields a different URL, which rotates the tailer.
-    /// The newest `Hearthstone_*` session folder across all known roots —
-    /// the running client's own folder (it creates one on launch).
+    /// Folder that holds the freshest Power.log. Directory mtime does not move
+    /// when a log is appended, so it must not be used to pick the session.
     static var currentSessionDirectory: URL? {
-        let keys: [URLResourceKey] = [.contentModificationDateKey, .isDirectoryKey]
-        var newest: (URL, Date)?
-
-        for directory in powerLogDirectories {
-            guard
-                let entries = try? FileManager.default.contentsOfDirectory(
-                    at: directory, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]
-                )
-            else { continue }
-
-            for url in entries where url.lastPathComponent.hasPrefix("Hearthstone_") {
-                guard
-                    let values = try? url.resourceValues(forKeys: Set(keys)),
-                    values.isDirectory == true
-                else { continue }
-                let date = values.contentModificationDate ?? .distantPast
-                if newest == nil || date > newest!.1 {
-                    newest = (url, date)
-                }
-            }
-        }
-
-        return newest?.0
+        currentSessionPowerLogURL?.deletingLastPathComponent()
     }
 
-    /// Power.log of the CURRENT session only — never an older session's file,
-    /// so a restarted client cannot resurrect a finished match on screen.
+    /// Power.log with the newest file mtime, across every known root and every
+    /// `Hearthstone_*` session folder. A restarted client gets a new file and
+    /// the tailer follows it on the next poll.
     static var currentSessionPowerLogURL: URL? {
-        guard let session = currentSessionDirectory else { return nil }
-        let url = session.appendingPathComponent("Power.log")
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        freshestPowerLog()
+    }
+
+    /// How long Power.log may sit unchanged before it is treated as stalled.
+    static let powerLogStallInterval: TimeInterval = 30
+
+    static func freshestPowerLog(fileManager: FileManager = .default) -> URL? {
+        var best: (URL, Date)?
+        func consider(_ url: URL) {
+            guard fileManager.fileExists(atPath: url.path) else { return }
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            if best == nil || modified > best!.1 {
+                best = (url, modified)
+            }
+        }
+        let keys: [URLResourceKey] = [.isDirectoryKey]
+        for root in powerLogDirectories {
+            consider(root.appendingPathComponent("Power.log"))
+            guard
+                let entries = try? fileManager.contentsOfDirectory(
+                    at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]
+                )
+            else { continue }
+            for url in entries where url.lastPathComponent.hasPrefix("Hearthstone_") {
+                guard (try? url.resourceValues(forKeys: Set(keys)))?.isDirectory == true else { continue }
+                consider(url.appendingPathComponent("Power.log"))
+            }
+        }
+        return best?.0
+    }
+
+    static func powerLogByteCount(_ url: URL, fileManager: FileManager = .default) -> Int {
+        (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
     }
 
     /// Whether the Hearthstone client process is currently running.
@@ -182,13 +193,19 @@ final class PowerLogMonitor {
     /// Resolves a deck code into its (cardID × count) list; injected by the
     /// store so the tracker can show the deck-view remaining cards.
     var deckListResolver: (@MainActor (String) -> [(cardID: String, count: Int)])?
+    /// True while MirrorMemory still sees a match. A stalled Power.log during
+    /// that window is not a healthy live feed.
+    var memoryInMatch: (@MainActor () -> Bool)?
 
     private var timer: Timer?
     private var tailer: PowerLogTailer?
     private var tailerURL: URL?
     private var tracker = MatchSessionTracker()
     private var lastStatus: LogPipelineStatus?
-    private var pollCount = 0
+    private var watchedByteCount: Int?
+    private var watchedByteChangedAt = Date()
+    private var powerLogStalled = false
+    private var didLogStall = false
 
     func start() {
         guard timer == nil else { return }
@@ -206,14 +223,6 @@ final class PowerLogMonitor {
     }
 
     private func poll() {
-        pollCount += 1
-        // Self-heal: incremental tailing must never be the only source of truth.
-        // Force a full re-read of the log once every 30s so a wedged tailer
-        // (missed appends, read errors) corrects itself within half a minute.
-        if pollCount % 60 == 0 {
-            tailer = nil
-        }
-
         guard HearthstoneLogLocator.isLogConfigPresent() else {
             publishIfKindChanged(.missingLogConfig)
             return
@@ -234,7 +243,20 @@ final class PowerLogMonitor {
             return
         }
 
-        if tailer == nil || tailerURL != url {
+        let switchedFile = tailerURL != url
+        if switchedFile {
+            watchedByteCount = nil
+            watchedByteChangedAt = Date()
+            powerLogStalled = false
+            didLogStall = false
+        }
+        notePowerLogGrowth(url)
+
+        // Rebuild only when the file is new, the handle was dropped after a
+        // read error, or the client rotated to a fresher Power.log. A healthy
+        // incremental tail must not re-read the whole file: that re-fires
+        // CREATE_GAME and associateDeck against a log that is not growing.
+        if tailer == nil || switchedFile {
             logDiagnostic("tailer rebuild for \(url.lastPathComponent)")
             tailerURL = url
             tailer = PowerLogTailer(fileURL: url)
@@ -247,7 +269,7 @@ final class PowerLogMonitor {
             let events = try activeTailer.readNewEvents()
             tailer = activeTailer
             guard !events.isEmpty else {
-                publishIfKindChanged(currentStatus())
+                publishIfKindChanged(feedStatus())
                 return
             }
             for event in events {
@@ -257,11 +279,55 @@ final class PowerLogMonitor {
                     gameStartLogTime = activeTailer.lastTimestamp
                 }
             }
-            publish(currentStatus())
+            publish(feedStatus())
         } catch {
             logDiagnostic("read error: \(error.localizedDescription)")
             tailer = nil
         }
+    }
+
+    /// Byte count unchanged for `powerLogStallInterval` means the client still
+    /// has the file open but is not appending. Memory can keep a match alive
+    /// after that; the log replay must not keep looking like a healthy feed.
+    private func notePowerLogGrowth(_ url: URL) {
+        let size = HearthstoneLogLocator.powerLogByteCount(url)
+        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        if watchedByteCount != size {
+            watchedByteCount = size
+            if let modified, Date().timeIntervalSince(modified) >= HearthstoneLogLocator.powerLogStallInterval {
+                watchedByteChangedAt = modified
+                markPowerLogStalled(bytes: size)
+            } else {
+                watchedByteChangedAt = Date()
+                powerLogStalled = false
+                didLogStall = false
+            }
+            return
+        }
+        if let modified, modified < watchedByteChangedAt {
+            watchedByteChangedAt = modified
+        }
+        guard Date().timeIntervalSince(watchedByteChangedAt) >= HearthstoneLogLocator.powerLogStallInterval else {
+            return
+        }
+        markPowerLogStalled(bytes: size)
+    }
+
+    private func markPowerLogStalled(bytes: Int) {
+        powerLogStalled = true
+        guard !didLogStall else { return }
+        didLogStall = true
+        let inMatch = memoryInMatch?() == true
+        logDiagnostic("Power.log stalled at \(bytes) bytes; memory inMatch=\(inMatch)")
+    }
+
+    private func feedStatus() -> LogPipelineStatus {
+        let base = currentStatus()
+        guard powerLogStalled, case let .live(record) = base else { return base }
+        if memoryInMatch?() == true {
+            return .logStalled(record)
+        }
+        return .loggedIn
     }
 
     /// Attributes the game that just started to the deck queued in Decks.log.
@@ -425,6 +491,7 @@ final class PowerLogMonitor {
              (.notRunning, .notRunning),
              (.loggedIn, .loggedIn),
              (.live, .live),
+             (.logStalled, .logStalled),
              (.finished, .finished):
             return true
         default:

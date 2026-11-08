@@ -41,8 +41,10 @@ private struct MenuBarContent: View {
 
         Divider()
 
-        Button("打开主窗口") {
+        Button {
             openWindow(id: "main")
+        } label: {
+            Label("打开主窗口", systemImage: "macwindow")
         }
 
         Toggle("左侧浮窗 · 对手记录", isOn: Binding(
@@ -71,8 +73,10 @@ private struct MenuBarContent: View {
 
         Divider()
 
-        Button("退出炉石助手") {
+        Button {
             NSApplication.shared.terminate(nil)
+        } label: {
+            Label("退出炉石助手", systemImage: "power")
         }
         .keyboardShortcut("q", modifiers: [.command])
     }

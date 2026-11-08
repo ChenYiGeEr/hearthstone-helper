@@ -100,18 +100,35 @@ struct DashboardView: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color.ink, Color(red: 10 / 255, green: 16 / 255, blue: 22 / 255)],
+                colors: [
+                    Color(red: 22 / 255, green: 34 / 255, blue: 44 / 255),
+                    Color.ink,
+                    Color(red: 7 / 255, green: 12 / 255, blue: 17 / 255)
+                ],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .ignoresSafeArea()
 
+            RadialGradient(
+                colors: [Color.gold.opacity(0.16), Color.gold.opacity(0.04), .clear],
+                center: UnitPoint(x: 0.12, y: 0),
+                startRadius: 12,
+                endRadius: 520
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
             HStack(spacing: 0) {
                 deckSidebar
-                Divider().overlay(Color.line)
+                Rectangle()
+                    .fill(Color.line)
+                    .frame(width: 1)
                 detailArea
             }
         }
+        .tint(Color.gold)
+        .preferredColorScheme(.dark)
         .frame(minWidth: 1_020, minHeight: 660)
         .onAppear {
             if selectedDeckID == nil {
@@ -136,15 +153,50 @@ struct DashboardView: View {
 
     private var deckSidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                Text("炉石助手")
-                    .font(.system(size: 19, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                Spacer()
-                memoryBadge
-                pipelineDot
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.gold, Color(red: 176 / 255, green: 124 / 255, blue: 58 / 255)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color.ink)
+                    }
+                    .frame(width: 28, height: 28)
+                    .shadow(color: Color.gold.opacity(0.35), radius: 6, y: 2)
+
+                    Text("炉石助手")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Spacer(minLength: 0)
+                }
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        pipelineDot
+                        memoryBadge
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        pipelineDot
+                        memoryBadge
+                    }
+                }
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.top, 18)
+            .padding(.bottom, 12)
+
+            Text("格式")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(Color.mist)
+                .padding(.horizontal, 18)
+                .padding(.bottom, 6)
 
             Picker("", selection: $isStandardFormat) {
                 Text("标准").tag(true)
@@ -152,16 +204,16 @@ struct DashboardView: View {
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
-            .padding(.bottom, 12)
+            .padding(.bottom, 14)
 
             // 全卡入口
             Button {
                 showsCollection = true
             } label: {
                 HStack(spacing: 10) {
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .fill(
-                            LinearGradient(colors: [Color.gold, Color.gold.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+                            LinearGradient(colors: [Color.gold, Color.gold.opacity(0.62)], startPoint: .top, endPoint: .bottom)
                         )
                         .frame(width: 32, height: 24)
                         .overlay(
@@ -179,33 +231,45 @@ struct DashboardView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(showsCollection ? Color.panel : Color.clear)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(showsCollection ? Color.gold.opacity(0.6) : .clear, lineWidth: 1)
-                )
+                .modifier(HoverHighlight(selected: showsCollection))
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 12)
+            .padding(.bottom, 10)
+
+            HStack(spacing: 8) {
+                Text("我的卡组")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.mist)
+                Rectangle()
+                    .fill(Color.line)
+                    .frame(height: 1)
+            }
+            .padding(.horizontal, 16)
             .padding(.bottom, 8)
 
-            Text("我的卡组")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(Color.mist)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
-
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     if store.deckLibrary.decks.isEmpty {
-                        Text("启动炉石并登录一次后，卡组会自动同步到这里")
-                            .font(.caption)
-                            .foregroundStyle(Color.mist)
-                            .padding(20)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Image(systemName: "rectangle.stack")
+                                .font(.title3)
+                                .foregroundStyle(Color.gold.opacity(0.9))
+                            Text("启动炉石并登录一次后，卡组会自动同步到这里")
+                                .font(.caption)
+                                .foregroundStyle(Color.mist)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.inkDeep.opacity(0.45))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(Color.line, lineWidth: 1)
+                        )
                     } else {
                         ForEach(formatGroupedDecks, id: \.0) { group in
                             VStack(alignment: .leading, spacing: 6) {
@@ -221,13 +285,20 @@ struct DashboardView: View {
                     }
                 }
                 .padding(.horizontal, 12)
+                .padding(.bottom, 12)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
             settingsSection
         }
-        .frame(width: 264)
-        .background(Color.inkLift.opacity(0.5))
+        .frame(width: 280)
+        .background(
+            LinearGradient(
+                colors: [Color.inkLift.opacity(0.78), Color.ink.opacity(0.2)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
     }
 
     /// Decks grouped by class, filtered by the selected format.
@@ -263,7 +334,7 @@ struct DashboardView: View {
                     .overlay(
                         Text(deck.className.prefix(1))
                             .font(.caption2.bold())
-                            .foregroundStyle(.white)
+                            .foregroundStyle(deck.className == "牧师" ? Color.ink : .white)
                     )
                     .shadow(color: classTint.opacity(0.5), radius: 3)
                 VStack(alignment: .leading, spacing: 2) {
@@ -284,20 +355,13 @@ struct DashboardView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(selected ? Color.panel : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(selected ? Color.gold.opacity(0.6) : .clear, lineWidth: 1)
-            )
+            .modifier(HoverHighlight(selected: selected))
             .overlay(alignment: .leading) {
                 if selected {
                     Capsule()
                         .fill(Color.gold)
-                        .frame(width: 3, height: 28)
-                        .offset(x: -2)
+                        .frame(width: 3, height: 22)
+                        .padding(.leading, 2)
                 }
             }
         }
@@ -376,11 +440,15 @@ struct DashboardView: View {
     // MARK: - Settings
 
     private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Divider().overlay(Color.line)
-            Text("助手行为")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(Color.mist)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("助手行为")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.mist)
+                Rectangle()
+                    .fill(Color.line)
+                    .frame(height: 1)
+            }
 
             Toggle("登录 macOS 时自动启动", isOn: Binding(
                 get: { store.lifecycle.launchesAtLogin },
@@ -405,9 +473,14 @@ struct DashboardView: View {
             }
             .pickerStyle(.segmented)
         }
+        .toggleStyle(.switch)
         .font(.caption)
-        .foregroundStyle(.white.opacity(0.9))
-        .padding(16)
+        .foregroundStyle(.white.opacity(0.92))
+        .padding(14)
+        .background(Color.inkDeep.opacity(0.42))
+        .overlay(alignment: .top) {
+            Rectangle().fill(Color.line).frame(height: 1)
+        }
     }
 
     // MARK: - Detail
@@ -426,19 +499,29 @@ struct DashboardView: View {
     }
 
     private var emptyDetail: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "square.stack.3d.up.slash")
-                .font(.system(size: 40))
-                .foregroundStyle(Color.mist)
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(Color.gold.opacity(0.1))
+                    .frame(width: 88, height: 88)
+                Circle()
+                    .strokeBorder(Color.gold.opacity(0.38), lineWidth: 1)
+                    .frame(width: 88, height: 88)
+                Image(systemName: "square.stack.3d.up.slash")
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(Color.gold)
+            }
             Text("选择一个卡组查看战绩")
-                .font(.headline)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
             Text("卡组列表从炉石客户端日志自动同步；打完对局后这里会出现胜率统计")
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(Color.mist)
                 .multilineTextAlignment(.center)
+                .frame(maxWidth: 380)
         }
         .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func deckDetail(_ deck: DeckLibraryStore.DeckSummary) -> some View {
@@ -446,37 +529,35 @@ struct DashboardView: View {
 
         return HStack(alignment: .top, spacing: 0) {
             ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 20) {
-                    HStack(spacing: 12) {
-                        RoundedRectangle(cornerRadius: 2)
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(alignment: .center, spacing: 14) {
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
                             .fill(
                                 LinearGradient(
-                                    colors: [Self.classColor(deck.className), Self.classColor(deck.className).opacity(0.5)],
+                                    colors: [Self.classColor(deck.className), Self.classColor(deck.className).opacity(0.45)],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
-                            .frame(width: 4, height: 46)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(deck.name)
-                            .font(.system(size: 27, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                        Text("\(deck.className) · \(deck.cardCount) 张构筑 · \(deck.formatName)")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.mist)
-                    }
-                    Spacer()
-                    Button {
-                        guard !deck.code.isEmpty else { return }
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(deck.code, forType: .string)
-                    } label: {
-                        Label("复制卡组代码", systemImage: "doc.on.doc")
-                            .font(.caption.weight(.bold))
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.gold)
-                    .disabled(deck.code.isEmpty)
+                            .frame(width: 5, height: 48)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(deck.name)
+                                .font(.system(size: 27, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                            HStack(spacing: 6) {
+                                metaPill(deck.className, tint: Self.classColor(deck.className))
+                                metaPill(deck.formatName, tint: Color.mist)
+                                metaPill("\(deck.cardCount) 张", tint: Color.gold)
+                            }
+                        }
+                        Spacer()
+                        goldButton("复制卡组代码", systemImage: "doc.on.doc") {
+                            guard !deck.code.isEmpty else { return }
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(deck.code, forType: .string)
+                        }
+                        .disabled(deck.code.isEmpty)
+                        .opacity(deck.code.isEmpty ? 0.4 : 1)
                     }
 
                     statsHeader(overall)
@@ -491,10 +572,42 @@ struct DashboardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Divider().overlay(Color.line)
+            Rectangle()
+                .fill(Color.line)
+                .frame(width: 1)
 
             deckCardList(deck)
         }
+    }
+
+    private func metaPill(_ text: String, tint: Color) -> some View {
+        Text(text)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(tint.opacity(0.18), in: Capsule())
+            .overlay(Capsule().strokeBorder(tint.opacity(0.35), lineWidth: 1))
+    }
+
+    private func goldButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Color.ink)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(
+                    LinearGradient(
+                        colors: [Color.gold, Color(red: 184 / 255, green: 132 / 255, blue: 62 / 255)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    in: Capsule()
+                )
+                .shadow(color: Color.gold.opacity(0.28), radius: 6, y: 2)
+        }
+        .buttonStyle(.plain)
     }
 
     private func statsHeader(_ stats: MatchHistoryStore.DeckStats) -> some View {
@@ -504,8 +617,7 @@ struct DashboardView: View {
             statBlock("胜 / 负 / 平", "\(stats.wins) / \(stats.losses) / \(stats.ties)")
             Spacer()
         }
-        .padding(20)
-        .background(Color.inkLift, in: RoundedRectangle(cornerRadius: 16))
+        .modifier(PanelSurface(pad: 18))
     }
 
     /// The win-rate ring is the deck page's visual anchor.
@@ -514,29 +626,30 @@ struct DashboardView: View {
 
         return ZStack {
             Circle()
-                .stroke(Color.line, lineWidth: 6)
+                .stroke(Color.line, lineWidth: 7)
             Circle()
                 .trim(from: 0, to: rate)
                 .stroke(
                     LinearGradient(
-                        colors: [Color.mint, Color.mint.opacity(0.65)],
+                        colors: [Color.mint, Color.gold.opacity(0.85)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                    style: StrokeStyle(lineWidth: 7, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
                 .animation(.easeInOut(duration: 0.4), value: rate)
+                .shadow(color: Color.mint.opacity(0.35), radius: 4)
             VStack(spacing: 0) {
                 Text(stats.games > 0 ? "\(Int(rate * 100))%" : "—")
-                    .font(.system(size: 17, weight: .heavy, design: .rounded))
+                    .font(.system(size: 18, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
                 Text("胜率")
-                    .font(.system(size: 9))
+                    .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(Color.mist)
             }
         }
-        .frame(width: 64, height: 64)
+        .frame(width: 72, height: 72)
     }
 
     private func statBlock(_ label: String, _ value: String, tint: Color = .white) -> some View {
@@ -582,9 +695,7 @@ struct DashboardView: View {
         return Group {
             if !rows.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("起手留牌（样本 \(matches.count) 局）")
-                        .font(.headline)
-                        .foregroundStyle(.white)
+                    sectionTitle("起手留牌（样本 \(matches.count) 局）")
                     ForEach(rows.prefix(10), id: \.name) { row in
                         mulliganRowView(row, deck: deck)
                     }
@@ -592,6 +703,7 @@ struct DashboardView: View {
                         .font(.caption2)
                         .foregroundStyle(Color.mist.opacity(0.7))
                 }
+                .modifier(PanelSurface())
             }
         }
     }
@@ -615,7 +727,9 @@ struct DashboardView: View {
                 statPair("换 \(row.discarded)", dropRate)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private func statPair(_ label: String, _ rate: Double) -> some View {
@@ -628,9 +742,7 @@ struct DashboardView: View {
         let classNames = orderedClasses(deck)
 
         return VStack(alignment: .leading, spacing: 12) {
-            Text("面对各职业")
-                .font(.headline)
-                .foregroundStyle(.white)
+            sectionTitle("面对各职业")
             if classNames.isEmpty {
                 Text("暂无对局数据")
                     .font(.caption)
@@ -640,6 +752,18 @@ struct DashboardView: View {
                     classRow(className: className, deckID: deck.id)
                 }
             }
+        }
+        .modifier(PanelSurface())
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Color.gold)
+                .frame(width: 3, height: 14)
+            Text(text)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
         }
     }
 
@@ -656,7 +780,11 @@ struct DashboardView: View {
         let total = max(stats.wins + stats.losses, 1)
 
         return VStack(alignment: .leading, spacing: 4) {
-            HStack {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Self.classColor(className))
+                    .frame(width: 8, height: 8)
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5))
                 Text(className)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.white)
@@ -690,9 +818,7 @@ struct DashboardView: View {
         let matches = store.history.recentMatches(deckID: deck.id)
 
         return VStack(alignment: .leading, spacing: 12) {
-            Text("最近对局")
-                .font(.headline)
-                .foregroundStyle(.white)
+            sectionTitle("最近对局")
             if matches.isEmpty {
                 Text("还没有已完成的对局")
                     .font(.caption)
@@ -703,6 +829,7 @@ struct DashboardView: View {
                 }
             }
         }
+        .modifier(PanelSurface())
     }
 
     private func matchRow(_ entry: MatchHistoryEntry) -> some View {
@@ -718,11 +845,16 @@ struct DashboardView: View {
                     Text(entry.result == .win ? "胜" : entry.result == .loss ? "负" : "平")
                         .font(.caption.bold())
                         .foregroundStyle(Color.ink)
-                        .frame(width: 24, height: 24)
+                        .frame(width: 26, height: 26)
                         .background(
                             entry.result == .win ? Color.mint :
                                 entry.result == .loss ? Color.gold : Color.mist,
                             in: Circle()
+                        )
+                        .shadow(
+                            color: (entry.result == .win ? Color.mint : Color.gold).opacity(0.28),
+                            radius: 4,
+                            y: 1
                         )
                     Text("对阵 \(localizedOpponentClass(entry.opponentClass))")
                         .font(.subheadline)
@@ -765,11 +897,14 @@ struct DashboardView: View {
                     .padding(.bottom, 10)
             }
         }
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(expanded ? Color.inkLift : Color.clear)
-        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 2)
+        .modifier(HoverHighlight(
+            selected: expanded,
+            radius: 12,
+            selectedFill: Color.inkDeep.opacity(0.85),
+            selectedStroke: Color.gold.opacity(0.28)
+        ))
     }
 
     /// Inline post-game review: everything both sides showed this match.
@@ -883,7 +1018,7 @@ struct DashboardView: View {
             }
             if entries.reduce(0, { $0 + $1.count }) >= 30,
                let heroDbfID = opponentHeroDbfID(entry, catalog: catalog) {
-                Button {
+                goldButton("复制对手卡组代码", systemImage: "doc.on.doc") {
                     let code = DeckCode.encode(
                         heroDbfID: heroDbfID,
                         cards: entries,
@@ -892,12 +1027,7 @@ struct DashboardView: View {
                     guard !code.isEmpty else { return }
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(code, forType: .string)
-                } label: {
-                    Label("复制对手卡组代码", systemImage: "doc.on.doc")
-                        .font(.caption.weight(.bold))
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.gold)
             }
         }
     }
@@ -935,8 +1065,12 @@ struct DashboardView: View {
         }
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.05))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.045))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.line, lineWidth: 1)
         )
     }
 
@@ -997,7 +1131,13 @@ struct DashboardView: View {
         let visible = filteredCards(deck)
 
         return VStack(alignment: .leading, spacing: 10) {
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
+                Text("牌表")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                Text("\(visible.count)/\(deck.cards.count)")
+                    .font(.caption2.monospacedDigit().weight(.bold))
+                    .foregroundStyle(Color.mist)
                 Spacer()
                 if filters.isActive {
                     Button("重置筛选") {
@@ -1017,20 +1157,16 @@ struct DashboardView: View {
                 ManaCurveView(curve: deck.curve, selection: $filters.costs)
             }
 
-            Divider().overlay(Color.line)
+            Rectangle()
+                .fill(Color.line)
+                .frame(height: 1)
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 4) {
                     if deck.cards.isEmpty {
-                        Text("卡牌数据未就绪")
-                            .font(.caption)
-                            .foregroundStyle(Color.mist)
-                            .padding(16)
+                        deckListEmpty("卡牌数据未就绪", systemImage: "square.dashed")
                     } else if visible.isEmpty {
-                        Text("没有符合条件的卡")
-                            .font(.caption)
-                            .foregroundStyle(Color.mist)
-                            .padding(16)
+                        deckListEmpty("没有符合条件的卡", systemImage: "line.3.horizontal.decrease.circle")
                     } else {
                         ForEach(visible, id: \.cardID) { card in
                             deckCardRow(cardID: card.cardID, count: card.count, hoveredCardID: $hoveredCardID)
@@ -1040,11 +1176,27 @@ struct DashboardView: View {
                 .padding(.vertical, 4)
             }
         }
-        .padding(20)
-        .frame(width: 280)
+        .padding(18)
+        .frame(width: 296)
+        .background(Color.inkLift.opacity(0.28))
         .overlay(alignment: .trailing) {
             hoverCardPreview
         }
+    }
+
+    private func deckListEmpty(_ text: String, systemImage: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(Color.gold.opacity(0.85))
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(Color.mist)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .padding(.horizontal, 12)
     }
 
     // MARK: - Filter chips
@@ -1149,6 +1301,7 @@ struct DashboardView: View {
         let tint: Color
         let isOn: Bool
         let action: () -> Void
+        @State private var hovering = false
 
         var body: some View {
             Button(action: action) {
@@ -1156,7 +1309,7 @@ struct DashboardView: View {
                     Circle().fill(tint).frame(width: 5, height: 5)
                     Text(label)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(isOn ? 1 : 0.82))
+                        .foregroundStyle(.white.opacity(isOn || hovering ? 1 : 0.82))
                     Text("\(count)")
                         .font(.system(size: 10, weight: .bold).monospacedDigit())
                         .foregroundStyle(isOn ? tint : Color.mist)
@@ -1164,13 +1317,17 @@ struct DashboardView: View {
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
                 .background(
-                    Capsule().fill(isOn ? tint.opacity(0.28) : Color.inkDeep.opacity(0.55))
+                    Capsule().fill(isOn ? tint.opacity(0.32) : (hovering ? Color.white.opacity(0.07) : Color.inkDeep.opacity(0.55)))
                 )
                 .overlay(
-                    Capsule().strokeBorder(isOn ? tint.opacity(0.8) : Color.line.opacity(0.5), lineWidth: 1)
+                    Capsule().strokeBorder(
+                        isOn ? tint.opacity(0.9) : (hovering ? tint.opacity(0.5) : Color.line),
+                        lineWidth: 1
+                    )
                 )
             }
             .buttonStyle(.plain)
+            .onHover { hovering = $0 }
         }
     }
 
@@ -1185,8 +1342,12 @@ struct DashboardView: View {
                 Image(nsImage: image)
                     .resizable()
                     .frame(width: 232, height: 232 * 388.0 / 256.0)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: .black.opacity(0.6), radius: 16, y: 4)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.gold.opacity(0.85), lineWidth: 1.5)
+                    )
+                    .shadow(color: .black.opacity(0.6), radius: 18, y: 6)
                     .allowsHitTesting(false)
                 if let comboNote {
                     Text(comboNote)
@@ -1288,7 +1449,22 @@ struct DashboardView: View {
         var body: some View {
             let peak = max(curve.max() ?? 1, 1)
 
-            return HStack(alignment: .bottom, spacing: 5) {
+            return VStack(alignment: .leading, spacing: 6) {
+                Text("费用曲线")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Color.mist)
+                curveBars(peak: peak)
+            }
+            .padding(10)
+            .background(Color.inkDeep.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.line, lineWidth: 1)
+            )
+        }
+
+        private func curveBars(peak: Int) -> some View {
+            HStack(alignment: .bottom, spacing: 5) {
                 ForEach(Array(curve.enumerated()), id: \.offset) { index, count in
                     let isSelected = selection.contains(index)
                     Button {
@@ -1330,8 +1506,6 @@ struct DashboardView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(10)
-            .background(Color.inkLift, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 }
@@ -1346,12 +1520,71 @@ private struct MulliganRow {
 }
 
 private extension Color {
-    static let ink = Color(red: 16 / 255, green: 26 / 255, blue: 33 / 255)
-    static let inkLift = Color(red: 23 / 255, green: 38 / 255, blue: 48 / 255)
-    static let panel = Color(red: 29 / 255, green: 48 / 255, blue: 60 / 255)
-    static let line = Color(red: 83 / 255, green: 111 / 255, blue: 125 / 255).opacity(0.45)
-    static let gold = Color(red: 214 / 255, green: 168 / 255, blue: 93 / 255)
-    static let mint = Color(red: 105 / 255, green: 200 / 255, blue: 176 / 255)
-    static let mist = Color(red: 142 / 255, green: 162 / 255, blue: 176 / 255)
-    static let inkDeep = Color(red: 14 / 255, green: 22 / 255, blue: 29 / 255)
+    static let ink = Color(red: 12 / 255, green: 20 / 255, blue: 28 / 255)
+    static let inkLift = Color(red: 20 / 255, green: 34 / 255, blue: 44 / 255)
+    static let panel = Color(red: 32 / 255, green: 50 / 255, blue: 62 / 255)
+    static let line = Color(red: 126 / 255, green: 154 / 255, blue: 168 / 255).opacity(0.32)
+    static let gold = Color(red: 224 / 255, green: 176 / 255, blue: 96 / 255)
+    static let mint = Color(red: 112 / 255, green: 206 / 255, blue: 176 / 255)
+    static let mist = Color(red: 158 / 255, green: 176 / 255, blue: 188 / 255)
+    static let inkDeep = Color(red: 8 / 255, green: 14 / 255, blue: 20 / 255)
+}
+
+/// Selected and hovered row chrome shared by the sidebar and match list.
+private struct HoverHighlight: ViewModifier {
+    var selected: Bool
+    var radius: CGFloat = 10
+    var selectedFill: Color = .panel
+    var selectedStroke: Color = Color.gold.opacity(0.72)
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(selected ? selectedFill : (hovering ? Color.white.opacity(0.055) : Color.clear))
+                    .animation(.easeOut(duration: 0.16), value: hovering)
+                    .animation(.easeOut(duration: 0.16), value: selected)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(
+                        selected ? selectedStroke : (hovering ? Color.line : Color.clear),
+                        lineWidth: 1
+                    )
+                    .animation(.easeOut(duration: 0.16), value: hovering)
+                    .animation(.easeOut(duration: 0.16), value: selected)
+            )
+            .onHover { hovering = $0 }
+    }
+}
+
+/// Inset panel used for win rate, matchup and history sections.
+private struct PanelSurface: ViewModifier {
+    var pad: CGFloat = 16
+
+    func body(content: Content) -> some View {
+        content
+            .padding(pad)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.inkLift.opacity(0.94))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.gold.opacity(0.38),
+                                Color.line,
+                                Color.white.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+    }
 }

@@ -94,22 +94,20 @@ enum HearthChrome {
 
     @MainActor
     static func applyAppAppearance(_ choice: AppearanceChoice) {
-        // NSApp is nil while SwiftUI is still creating the App. Callers must
-        // wait until applicationDidFinishLaunching or a later user action.
-        guard NSApp != nil else { return }
+        // Prefer NSApplication.shared over NSApp. MatchStore.init must not call
+        // this: NSApp can still be nil while the App is being constructed.
+        // applicationDidFinishLaunching and later theme changes are safe.
+        let app = NSApplication.shared
         switch choice {
         case .light:
-            NSApp.appearance = NSAppearance(named: .aqua)
+            app.appearance = NSAppearance(named: .aqua)
+            isLight = true
         case .dark:
-            NSApp.appearance = NSAppearance(named: .darkAqua)
+            app.appearance = NSAppearance(named: .darkAqua)
+            isLight = false
         case .system:
-            NSApp.appearance = nil
-        }
-        let systemLight = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) != .darkAqua
-        switch choice {
-        case .light: isLight = true
-        case .dark: isLight = false
-        case .system: isLight = systemLight
+            app.appearance = nil
+            isLight = app.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) != .darkAqua
         }
     }
 

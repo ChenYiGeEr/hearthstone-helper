@@ -125,11 +125,11 @@ private struct MenuBarContent: View {
     private var statusText: String {
         let _ = store.chromeRevision
         switch store.status {
-        case .missingLogConfig: HearthChrome.L("状态：日志未启用", "Status: logs off")
-        case .notRunning: HearthChrome.L("状态：未登录（炉石未运行）", "Status: signed out (Hearthstone isn't running)")
-        case .loggedIn: HearthChrome.L("状态：已登录 · 等待对局", "Status: signed in · waiting for a game")
-        case .live: HearthChrome.L("状态：游戏中", "Status: in game")
-        case .finished: HearthChrome.L("状态：本局已结束", "Status: match over")
+        case .missingLogConfig: return HearthChrome.L("状态：日志未启用", "Status: logs off")
+        case .notRunning: return HearthChrome.L("状态：未登录（炉石未运行）", "Status: signed out (Hearthstone isn't running)")
+        case .loggedIn: return HearthChrome.L("状态：已登录 · 等待对局", "Status: signed in · waiting for a game")
+        case .live: return HearthChrome.L("状态：游戏中", "Status: in game")
+        case .finished: return HearthChrome.L("状态：本局已结束", "Status: match over")
         }
     }
 }

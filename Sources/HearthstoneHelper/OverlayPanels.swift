@@ -275,7 +275,7 @@ private func zoneGroup(
     store: MatchStore,
     hoveredCardID: Binding<String?>,
     showsCount: Bool = true,
-    hideWhenEmpty: Bool = true,
+    hideWhenEmpty: Bool = false,
     animated: Bool = false,
     trailing: ((TrackedCard) -> String?)? = nil
 ) -> some View {
@@ -285,19 +285,15 @@ private func zoneGroup(
         EmptyView()
     } else {
         OverlaySection(title: title, count: revealed + unknown, tint: tint, showsCount: showsCount) {
-            if animated && HearthChrome.motion != .off {
-                ForEach(cards, id: \.rowKey) { card in
-                    OverlayCardRow(card: card, trailing: (trailing ?? zoneTrailing)(card), store: store, hoveredCardID: hoveredCardID)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-                .animation(
-                    HearthChrome.Motion.optional(.spring(response: 0.32, dampingFraction: 0.92)),
-                    value: cards.map { "\($0.rowKey)#\($0.copies)" }
-                )
-            } else {
-                ForEach(cards) { card in
-                    OverlayCardRow(card: card, trailing: (trailing ?? zoneTrailing)(card), store: store, hoveredCardID: hoveredCardID)
-                }
+            // Identity includes origin so an original and a generated copy of the
+            // same card are not collapsed into one ForEach row. Do not use an
+            // insertion transition here: live log updates are not inside
+            // withAnimation, so a fade-in stays at opacity 0 and the row never
+            // appears. Opponent reveals are almost all insertions; the friendly
+            // deck mostly removes rows, which is why only the left panel looked frozen.
+            ForEach(cards, id: \.overlayRowID) { card in
+                OverlayCardRow(card: card, trailing: (trailing ?? zoneTrailing)(card), store: store, hoveredCardID: hoveredCardID)
+                    .transition(.identity)
             }
             if unknown > 0 {
                 HStack(spacing: 6) {
@@ -309,12 +305,19 @@ private func zoneGroup(
                         .font(.caption2.monospacedDigit().weight(.bold))
                         .foregroundStyle(Color.mistSoft)
                         .contentTransition(.numericText())
+                        .animation(animated ? HearthChrome.Motion.optional(.easeOut(duration: 0.18)) : nil, value: unknown)
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
             }
         }
     }
+}
+
+private extension TrackedCard {
+    /// Stable across log snapshots (the UUID `id` is new every poll) and unique
+    /// when the same cardID exists as both an original and a generated copy.
+    var overlayRowID: String { "\(rowKey)|\(origin.rawValue)" }
 }
 
 private func zoneTrailing(_ card: TrackedCard) -> String? {
@@ -372,7 +375,7 @@ private extension OpponentOverlayPanel {
                 tint: .mistSoft,
                 startsExpanded: false
             ) {
-                ForEach(cards, id: \.rowKey) { card in
+                ForEach(cards, id: \.overlayRowID) { card in
                     OverlayCardRow(
                         card: card,
                         trailing: "×\(card.copies)",
@@ -712,10 +715,8 @@ private struct OverlaySection<Content: View>: View {
                 }
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
-                .transition(.opacity)
             }
         }
-        .animation(HearthChrome.Motion.optional(.easeOut(duration: 0.16)), value: expanded)
     }
 }
 

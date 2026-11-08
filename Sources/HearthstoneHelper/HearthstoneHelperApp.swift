@@ -5,14 +5,11 @@ struct HearthstoneHelperApp: App {
     @State private var store = MatchStore()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    init() {
-        OverlayWindowManager.shared.install(store: store)
-    }
-
     var body: some Scene {
         WindowGroup(store.interfaceLanguage == InterfaceLanguage.english.rawValue ? "Hearthstone" : "炉石助手", id: "main") {
             DashboardView(store: store)
                 .frame(minWidth: 980, minHeight: 660)
+                .onAppear { store.begin() }
         }
         .defaultSize(width: 1_180, height: 760)
         .windowResizability(.contentMinSize)

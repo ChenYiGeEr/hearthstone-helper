@@ -33,14 +33,19 @@ final class MirrorBridge {
         // blocking: false — never hang the caller; retry on the next tick.
         // acquireTaskportRight() must precede init: the system may prompt for
         // the task-port permission on first attach.
-        let right = acquireTaskportRight()
-        mirror = HearthMirror(pid: app.processIdentifier, blocking: false)
-        mirrorPID = app.processIdentifier
-        isAttached = mirror != nil
-        if mirror != nil {
-            refreshReadouts()
-            Self.logDiagnostic("mirror attached pid=\(app.processIdentifier) tag=\(battleTag ?? "?") session=\(logSessionDir ?? "?")")
+        _ = acquireTaskportRight()
+        guard let created = MirrorFaultGuard.protect({
+            HearthMirror(pid: app.processIdentifier, blocking: false)
+        }) else {
+            mirror = nil
+            isAttached = false
+            return
         }
+        mirror = created
+        mirrorPID = app.processIdentifier
+        isAttached = true
+        refreshReadouts()
+        Self.logDiagnostic("mirror attached pid=\(app.processIdentifier) tag=\(battleTag ?? "?") session=\(logSessionDir ?? "?")")
     }
 
     private static func logDiagnostic(_ message: String) {
@@ -64,16 +69,31 @@ final class MirrorBridge {
 
     private func refreshReadouts() {
         guard let mirror else { return }
-        battleTag = mirror.getBattleTag()
-        logSessionDir = mirror.getLogSessionDir()
-        decks = mirror.getDecks().map {
-            (name: $0.name ?? "?", hero: $0.hero ?? "?", cardCount: $0.cards.count)
+        guard let reading = MirrorFaultGuard.protect({ () -> (String?, String?, [(String, String, Int)]) in
+            let tag = mirror.getBattleTag()
+            let session = mirror.getLogSessionDir()
+            let decks = mirror.getDecks().map {
+                (name: $0.name ?? "?", hero: $0.hero ?? "?", cardCount: $0.cards.count)
+            }
+            return (tag, session, decks)
+        }) else {
+            self.mirror = nil
+            isAttached = false
+            return
         }
+        battleTag = reading.0
+        logSessionDir = reading.1
+        decks = reading.2
     }
 
     /// Reads the opponent's name while a match is running (nil outside a match).
     func opponentName() -> String? {
-        guard let mirror, let matchInfo = mirror.getMatchInfo() else { return nil }
-        return matchInfo.opposingPlayer.name
+        guard let mirror else { return nil }
+        guard let name = MirrorFaultGuard.protect({ mirror.getMatchInfo()?.opposingPlayer.name }) else {
+            self.mirror = nil
+            isAttached = false
+            return nil
+        }
+        return name
     }
 }

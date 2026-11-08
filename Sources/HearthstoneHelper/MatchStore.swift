@@ -106,6 +106,7 @@ final class MatchStore {
     }
 
     let deckMarks = DeckMarks()
+    private var didBegin = false
 
     /// Background tint for the overlay panels, by user-selected transparency level.
     var overlayBackgroundOpacity: Double {
@@ -245,36 +246,43 @@ final class MatchStore {
                 self.deckLibrary.refresh(catalog: self.cardData.catalog)
             }
         }
-        monitor.start()
-        live.start()
-        memory.start()
-        // mirror attach runs on a slow timer: game launch/exit and the first
-        // task-port approval are asynchronous
-        Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.mirror.attachIfNeeded()
-            }
-        }
-        monitor.start()
-        Task {
-            await cardData.bootstrap()
-            if let catalog = cardData.catalog {
-                history.relocalize(catalog: catalog)
-            }
-            deckLibrary.refresh(catalog: cardData.catalog, mirrorDecks: live.ownDecks)
-        }
+    }
 
-        // Decks.log updates when the client logs in or decks are edited — events
-        // this app cannot observe directly — so poll the library on a slow timer.
-        libraryRefreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, self.cardData.catalog != nil else { return }
+    /// Starts logs, memory, and the mirror. Not called from `init`: that runs
+    /// while SwiftUI is installing `@State`, and a synchronous Power.log read
+    /// or HearthMirror attach there never lets the window appear.
+    func begin() {
+        guard !didBegin else { return }
+        didBegin = true
+        OverlayWindowManager.shared.install(store: self)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.monitor.start()
+            self.live.start()
+            self.memory.start()
+            self.mirrorTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.mirror.attachIfNeeded()
+                }
+            }
+            self.libraryRefreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.cardData.catalog != nil else { return }
+                    self.deckLibrary.refresh(catalog: self.cardData.catalog, mirrorDecks: self.live.ownDecks)
+                }
+            }
+            Task { @MainActor in
+                await self.cardData.bootstrap()
+                if let catalog = self.cardData.catalog {
+                    self.history.relocalize(catalog: catalog)
+                }
                 self.deckLibrary.refresh(catalog: self.cardData.catalog, mirrorDecks: self.live.ownDecks)
             }
         }
     }
 
     private var libraryRefreshTimer: Timer?
+    private var mirrorTimer: Timer?
 
     /// deck code → (cardID × count) through the catalog's dbfId reverse index.
     private static func resolveDeckList(

@@ -63,7 +63,6 @@ final class MirrorLiveStore {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
         }
-        poll()
     }
 
     private func poll() {
@@ -78,58 +77,92 @@ final class MirrorLiveStore {
         if mirror == nil || mirrorPID != app.processIdentifier {
             // acquireTaskportRight may prompt on first attach; non-blocking retry
             _ = acquireTaskportRight()
-            mirror = HearthMirror(pid: app.processIdentifier, blocking: false)
+            let created = MirrorFaultGuard.protect {
+                HearthMirror(pid: app.processIdentifier, blocking: false)
+            }
+            guard let created else {
+                mirror = nil
+                attached = false
+                return
+            }
+            mirror = created
             mirrorPID = app.processIdentifier
         }
         guard let mirror else { return }
+
+        let reading = MirrorFaultGuard.protect { () -> LiveReading in
+            var reading = LiveReading()
+            if self.battleTag == nil { reading.battleTag = mirror.getBattleTag() }
+            reading.selectedDeckID = mirror.getSelectedDeck()?.intValue
+            if self.ownDecks.isEmpty {
+                reading.decks = mirror.getDecks().map { deck in
+                    OwnDeck(
+                        id: deck.id.intValue,
+                        name: deck.name ?? "?",
+                        heroCardID: deck.hero ?? "?",
+                        formatType: deck.formatType.intValue,
+                        cards: deck.cards.map { ($0.cardId, $0.count.intValue) }
+                    )
+                }
+            }
+            if let match = mirror.getMatchInfo() {
+                reading.opponent = OpponentInfo(
+                    name: match.opposingPlayer.name,
+                    leagueID: match.opposingPlayer.standardMedalInfo.leagueId.intValue,
+                    stars: match.opposingPlayer.standardMedalInfo.stars.intValue
+                )
+                reading.localLeagueID = match.localPlayer.standardMedalInfo.leagueId.intValue
+                reading.localStars = match.localPlayer.standardMedalInfo.stars.intValue
+                reading.gameType = match.gameType.intValue
+                reading.formatType = match.formatType.intValue
+            }
+            if let ms = mirror.getMulliganState() {
+                reading.mulligan = MulliganSnapshot(
+                    cardIDs: ms.mulliganCards.compactMap { $0.cardId },
+                    done: !ms.waitingForUserInput
+                )
+            }
+            return reading
+        }
+        guard let reading else {
+            self.mirror = nil
+            attached = false
+            return
+        }
         attached = true
-
-        if battleTag == nil { battleTag = mirror.getBattleTag() }
-
-        if let selected = mirror.getSelectedDeck()?.intValue {
+        if battleTag == nil { battleTag = reading.battleTag }
+        if let selected = reading.selectedDeckID {
             selectedDeckID = selected
             selectedDeckName = ownDecks.first { $0.id == selected }?.name
         }
-
-        // deck library: read once per session (expensive memory walk)
-        if ownDecks.isEmpty {
-            ownDecks = mirror.getDecks().map { deck in
-                OwnDeck(
-                    id: deck.id.intValue,
-                    name: deck.name ?? "?",
-                    heroCardID: deck.hero ?? "?",
-                    formatType: deck.formatType.intValue,
-                    cards: deck.cards.map { ($0.cardId, $0.count.intValue) }
-                )
-            }
+        if ownDecks.isEmpty, let decks = reading.decks {
+            ownDecks = decks
         }
-
-        // match info: only meaningful while a game is running
-        if let match = mirror.getMatchInfo() {
-            opponent = OpponentInfo(
-                name: match.opposingPlayer.name,
-                leagueID: match.opposingPlayer.standardMedalInfo.leagueId.intValue,
-                stars: match.opposingPlayer.standardMedalInfo.stars.intValue
-            )
-            localLeagueID = match.localPlayer.standardMedalInfo.leagueId.intValue
-            localStars = match.localPlayer.standardMedalInfo.stars.intValue
+        if let opponent = reading.opponent {
+            self.opponent = opponent
+            localLeagueID = reading.localLeagueID
+            localStars = reading.localStars
             RankLog.record(leagueID: localLeagueID, stars: localStars)
-            gameType = match.gameType.intValue
-            formatType = match.formatType.intValue
+            gameType = reading.gameType
+            formatType = reading.formatType
         } else {
             opponent = nil
             gameType = nil
             formatType = nil
         }
+        mulligan = reading.mulligan
+    }
 
-        if let ms = mirror.getMulliganState() {
-            mulligan = MulliganSnapshot(
-                cardIDs: ms.mulliganCards.compactMap { $0.cardId },
-                done: !ms.waitingForUserInput
-            )
-        } else {
-            mulligan = nil
-        }
+    private struct LiveReading {
+        var battleTag: String?
+        var selectedDeckID: Int?
+        var decks: [OwnDeck]?
+        var opponent: OpponentInfo?
+        var localLeagueID: Int?
+        var localStars: Int?
+        var gameType: Int?
+        var formatType: Int?
+        var mulligan: MulliganSnapshot?
     }
 
     /// The collection is only readable while the in-game collection scene is
@@ -137,7 +170,11 @@ final class MirrorLiveStore {
     func fetchCollectionIfNeeded() {
         guard let mirror else { return }
         if let collection, !collection.owned.isEmpty { return }
-        let coll = mirror.getCollection()
+        guard let coll = MirrorFaultGuard.protect({ mirror.getCollection() }) else {
+            self.mirror = nil
+            attached = false
+            return
+        }
         var summary = CollectionSummary(dust: coll.dust.intValue, gold: coll.gold.intValue)
         for card in coll.cards {
             let id = card.cardId

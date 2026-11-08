@@ -214,7 +214,8 @@ final class PowerLogMonitor {
                 self?.poll()
             }
         }
-        poll()
+        // The first poll can read a multi-megabyte Power.log. Do not run it
+        // on the caller's stack: MatchStore.begin() is what shows the window.
     }
 
     func stop() {

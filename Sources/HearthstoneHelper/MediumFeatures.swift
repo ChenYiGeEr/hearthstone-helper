@@ -87,7 +87,7 @@ struct OpponentInferenceView: View {
 
     private var inferenceBody: some View {
         let built = OpponentInference.lines(cards: cards, deckCount: deckCount, catalog: catalog)
-        VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 6) {
             Text(HearthChrome.L("对手牌推断", "Opponent inference"))
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Color.hearthText)
@@ -508,6 +508,7 @@ struct UpdateNotesSection: View {
 // MARK: - Diagnostics
 
 enum DiagnosticsReport {
+    @MainActor
     static func text(store: MatchStore) -> String {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("HearthstoneHelper")

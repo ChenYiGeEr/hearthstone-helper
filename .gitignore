@@ -1,0 +1,16 @@
+# Swift Package Manager 构建产物
+/.build/
+
+# Xcode 打开 Package.swift 时自动生成（仅用户级数据，无需入库）
+/.swiftpm/
+xcuserdata/
+DerivedData/
+
+# SPM 依赖源码（当前无外部依赖，备用）
+/Packages/
+
+# macOS
+.DS_Store
+
+# 凭据文件
+.netrc

@@ -93,7 +93,8 @@ final class MatchStore {
             guard oldValue != overlayLayout else { return }
             UserDefaults.standard.set(overlayLayout, forKey: Self.overlayLayoutKey)
             syncLayoutVisibility()
-        OverlayWindowManager.shared.applyLayoutPreset(overlayLayout)
+            OverlayWindowManager.shared.applyLayoutPreset(overlayLayout)
+        }
     }
 
     /// Optional opening-hand hints. Off by default.
@@ -102,7 +103,6 @@ final class MatchStore {
             guard oldValue != mulliganAdviceEnabled else { return }
             UserDefaults.standard.set(mulliganAdviceEnabled, forKey: Self.mulliganKey)
         }
-    }
     }
 
     let deckMarks = DeckMarks()

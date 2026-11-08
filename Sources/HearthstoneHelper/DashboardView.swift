@@ -1189,7 +1189,8 @@ struct DashboardView: View {
             OpponentInferenceView(
                 cards: entry.opponentCards ?? [],
                 deckCount: nil,
-                catalog: store.cardData.catalog
+                catalog: store.cardData.catalog,
+                extraOnly: true
             )
 
             turnTimeline(entry)

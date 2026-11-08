@@ -75,34 +75,36 @@ struct OpponentOverlayPanel: View {
                 rematchNote(previousEncounter)
             }
 
-            OpponentInferenceView(
-                cards: match.opponentCards,
-                deckCount: mergedOpponentStats?.deckCount,
-                catalog: store.cardData.catalog
-            )
-
             OverlayScrollView {
                 if let previousEncounter {
                     previousSeenSection(previousEncounter)
                 }
                 secretsBlock(match)
-                // counts come from the real zone totals (hidden cards included);
-                // unrevealed cards show up as "未知卡牌" placeholders
                 zoneGroup(
-                    HearthChrome.L("牌库中", "In deck"),
+                    HearthChrome.L("牌库", "Deck"),
                     tint: .goldSoft,
                     total: mergedOpponentStats?.deckCount,
                     cards: match.opponentCards.filter { $0.currentZone == "DECK" },
                     store: store,
-                    hoveredCardID: $hoveredCardID
+                    hoveredCardID: $hoveredCardID,
+                    showsCount: false,
+                    animated: HearthChrome.motion != .off
+                )
+                OpponentInferenceView(
+                    cards: match.opponentCards,
+                    deckCount: mergedOpponentStats?.deckCount,
+                    catalog: store.cardData.catalog,
+                    extraOnly: true
                 )
                 zoneGroup(
-                    HearthChrome.L("手牌中", "In hand"),
+                    HearthChrome.L("手牌", "Hand"),
                     tint: .mintSoft,
                     total: mergedOpponentStats?.handCount,
                     cards: match.opponentCards.filter { $0.currentZone == "HAND" },
                     store: store,
-                    hoveredCardID: $hoveredCardID
+                    hoveredCardID: $hoveredCardID,
+                    showsCount: false,
+                    animated: HearthChrome.motion != .off
                 )
                 zoneGroup(
                     HearthChrome.L("其他", "Other"),
@@ -112,7 +114,9 @@ struct OpponentOverlayPanel: View {
                         card.currentZone != "DECK" && card.currentZone != "HAND"
                     },
                     store: store,
-                    hoveredCardID: $hoveredCardID
+                    hoveredCardID: $hoveredCardID,
+                    hideWhenEmpty: true,
+                    animated: HearthChrome.motion != .off
                 )
             }
         }
@@ -172,15 +176,9 @@ struct PlayerOverlayPanel: View {
                 MulliganAdviceView(hints: MulliganAdvice.hints(cardIDs: mulligan.cardIDs, catalog: store.cardData.catalog))
             }
 
-            if let deckID = match.playerDeckID,
-               let deck = store.deckLibrary.decks.first(where: { $0.id == deckID }),
-               !deck.curve.isEmpty || !match.turns.isEmpty {
-                PaceCompareView(curve: deck.curve, turns: match.turns)
-            }
-
             OverlayScrollView {
                 zoneGroup(
-                    HearthChrome.L("牌库中", "In deck"),
+                    HearthChrome.L("牌库", "Deck"),
                     tint: .goldSoft,
                     total: mergedFriendlyStats?.deckCount,
                     cards: match.playerRemainingCards.sorted {
@@ -188,9 +186,9 @@ struct PlayerOverlayPanel: View {
                     },
                     store: store,
                     hoveredCardID: $hoveredCardID,
-                    animated: true,
+                    showsCount: false,
+                    animated: HearthChrome.motion != .off,
                     trailing: { card in
-                        // 洗入的外来牌与卡组原有的 30 张区分标注
                         var parts: [String] = []
                         if card.origin != .original { parts.append(HearthChrome.phrase("洗入")) }
                         if card.copies > 1 { parts.append("×\(card.copies)") }
@@ -198,7 +196,7 @@ struct PlayerOverlayPanel: View {
                     }
                 )
                 zoneGroup(
-                    HearthChrome.L("手牌中", "In hand"),
+                    HearthChrome.L("手牌", "Hand"),
                     tint: .mintSoft,
                     total: mergedFriendlyStats?.handCount,
                     cards: store.playerHandCardsResolved.sorted {
@@ -206,14 +204,27 @@ struct PlayerOverlayPanel: View {
                     },
                     store: store,
                     hoveredCardID: $hoveredCardID,
-                    animated: true
+                    showsCount: false,
+                    animated: HearthChrome.motion != .off
                 )
+                if !match.turns.isEmpty {
+                    OverlaySection(
+                        title: HearthChrome.L("节奏", "Pace"),
+                        count: match.turns.count,
+                        tint: .goldSoft,
+                        startsExpanded: false
+                    ) {
+                        PaceCompareView(curve: [], turns: match.turns, compact: true)
+                    }
+                }
                 zoneGroup(
                     HearthChrome.L("已打出", "Played"),
                     tint: .mistSoft,
                     cards: match.playerPlayedCards.reversed(),
                     store: store,
-                    hoveredCardID: $hoveredCardID
+                    hoveredCardID: $hoveredCardID,
+                    hideWhenEmpty: true,
+                    animated: HearthChrome.motion != .off
                 )
             }
         }
@@ -236,14 +247,9 @@ struct PlayerOverlayPanel: View {
                     .foregroundStyle(Color.mistSoft)
                 Spacer()
             }
-            .font(.caption2.weight(.bold).monospacedDigit())
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.lineSoft, lineWidth: 1)
-            )
+            .font(.caption2.weight(.semibold).monospacedDigit())
+            .padding(.horizontal, 2)
+            .padding(.vertical, 2)
         }
     }
 }
@@ -252,7 +258,7 @@ struct PlayerOverlayPanel: View {
 
 private func OverlayScrollView(@ViewBuilder content: () -> some View) -> some View {
     ScrollView(.vertical, showsIndicators: false) {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             content()
         }
         .padding(.vertical, 2)
@@ -268,56 +274,44 @@ private func zoneGroup(
     cards: [TrackedCard],
     store: MatchStore,
     hoveredCardID: Binding<String?>,
+    showsCount: Bool = true,
+    hideWhenEmpty: Bool = true,
     animated: Bool = false,
     trailing: ((TrackedCard) -> String?)? = nil
 ) -> some View {
     let revealed = cards.reduce(0) { $0 + $1.copies }
     let unknown = max((total ?? revealed) - revealed, 0)
-    OverlaySection(title: title, count: revealed + unknown, tint: tint) {
-        if cards.isEmpty && unknown == 0 {
-            OverlayEmpty(text: HearthChrome.L("暂无", "None"))
-        } else {
-            if animated {
-                // Stable rowKey identity lets SwiftUI diff snapshots (fresh
-                // UUIDs every poll would rebuild the list wholesale): cards
-                // entering the deck slide in from the top, cards leaving
-                // (drawn/played) slide down toward the hand section.
+    if hideWhenEmpty && cards.isEmpty && unknown == 0 {
+        EmptyView()
+    } else {
+        OverlaySection(title: title, count: revealed + unknown, tint: tint, showsCount: showsCount) {
+            if animated && HearthChrome.motion != .off {
                 ForEach(cards, id: \.rowKey) { card in
                     OverlayCardRow(card: card, trailing: (trailing ?? zoneTrailing)(card), store: store, hoveredCardID: hoveredCardID)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .top).combined(with: .opacity),
-                            removal: .move(edge: .bottom).combined(with: .opacity)
-                        ))
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                .animation(.spring(response: 0.35, dampingFraction: 1.0),
-                           value: cards.map { "\($0.rowKey)#\($0.copies)" })
+                .animation(
+                    HearthChrome.Motion.optional(.spring(response: 0.32, dampingFraction: 0.92)),
+                    value: cards.map { "\($0.rowKey)#\($0.copies)" }
+                )
             } else {
                 ForEach(cards) { card in
                     OverlayCardRow(card: card, trailing: (trailing ?? zoneTrailing)(card), store: store, hoveredCardID: hoveredCardID)
                 }
             }
             if unknown > 0 {
-                HStack(spacing: 8) {
-                    Image(systemName: "eye.slash")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color.mistSoft)
-                        .frame(width: 19, height: 19)
-                        .background(Color.hearthText.opacity(0.08), in: Circle())
-                    Text(HearthChrome.L("未知卡牌", "Unknown card"))
-                        .font(.system(size: 12, weight: .semibold))
+                HStack(spacing: 6) {
+                    Text(HearthChrome.L("未知", "Unknown"))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Color.mistSoft)
                     Spacer()
                     Text("×\(unknown)")
                         .font(.caption2.monospacedDigit().weight(.bold))
                         .foregroundStyle(Color.mistSoft)
+                        .contentTransition(.numericText())
                 }
                 .padding(.horizontal, 6)
-                .padding(.vertical, 4)
-                .background(Color.inkDeep.opacity(0.55), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(Color.lineSoft, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                )
+                .padding(.vertical, 3)
             }
         }
     }
@@ -372,7 +366,12 @@ private extension OpponentOverlayPanel {
     func previousSeenSection(_ previous: MatchHistoryEntry) -> some View {
         let cards = previousSeenCards(previous)
         if !cards.isEmpty {
-            OverlaySection(title: HearthChrome.L("上次", "Last time"), count: cards.reduce(0) { $0 + $1.copies }, tint: .mistSoft) {
+            OverlaySection(
+                title: HearthChrome.L("上次", "Last time"),
+                count: cards.reduce(0) { $0 + $1.copies },
+                tint: .mistSoft,
+                startsExpanded: false
+            ) {
                 ForEach(cards, id: \.rowKey) { card in
                     OverlayCardRow(
                         card: card,
@@ -422,7 +421,7 @@ private extension OpponentOverlayPanel {
         let count = match.opponentStats?.secrets ?? 0
         if count > 0, let catalog = store.cardData.catalog {
             let pool = catalog.secretCardIDs(classLabel: match.opponentClass)
-            OverlaySection(title: HearthChrome.L("奥秘 ×\(count)", "Secrets ×\(count)"), count: pool.count, tint: .goldSoft) {
+            OverlaySection(title: HearthChrome.L("奥秘", "Secrets"), count: count, tint: .goldSoft) {
                 ForEach(pool, id: \.self) { cardID in
                     let triggered = match.revealedSecrets.contains(cardID)
                     HStack(spacing: 8) {
@@ -433,7 +432,7 @@ private extension OpponentOverlayPanel {
                             .background(Color.goldSoft, in: Circle())
                         Text(catalog.displayName(for: cardID))
                             .font(.system(size: 12, weight: triggered ? .regular : .semibold))
-                            .foregroundStyle(triggered ? Color.mistSoft.opacity(0.7) : .white)
+                            .foregroundStyle(triggered ? Color.mistSoft.opacity(0.7) : Color.hearthText)
                             .strikethrough(triggered, color: .mistSoft)
                         Spacer()
                     }
@@ -484,7 +483,7 @@ private struct OverlayPanelShell<Content: View>: View {
 
     var body: some View {
         let _ = HearthChrome.install(hearthContext)
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 8) {
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(accent)
@@ -517,7 +516,7 @@ private struct OverlayPanelShell<Content: View>: View {
 
             content
         }
-        .padding(14)
+        .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
             Color.inkDeep.opacity(HearthChrome.isLight ? min(store.overlayBackgroundOpacity + 0.28, 0.94) : store.overlayBackgroundOpacity),
@@ -644,6 +643,7 @@ private struct SideStatsBar: View {
             Text((value.map(String.init) ?? "—") + (suffix ?? ""))
                 .foregroundStyle(Color.hearthText)
                 .contentTransition(.numericText())
+                .animation(HearthChrome.Motion.optional(.easeOut(duration: 0.2)), value: value ?? -1)
         }
     }
 
@@ -664,61 +664,58 @@ private struct OverlaySection<Content: View>: View {
     let title: String
     let count: Int
     let tint: Color
-    @State private var isExpanded = true
+    var showsCount: Bool = true
+    var startsExpanded: Bool = true
+    @State private var isExpanded: Bool?
     @ViewBuilder let content: Content
     @Environment(\.hearthContext) private var hearthContext
 
+    private var expanded: Bool { isExpanded ?? startsExpanded }
+
     var body: some View {
         let _ = HearthChrome.install(hearthContext)
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 4) {
             Button {
                 HearthChrome.Motion.run {
-                    isExpanded.toggle()
+                    isExpanded = !expanded
                 }
             } label: {
                 HStack(spacing: 6) {
                     RoundedRectangle(cornerRadius: 1.5)
-                        .fill(.white.opacity(0.9))
-                        .frame(width: 3, height: 12)
+                        .fill(Color.hearthText.opacity(0.85))
+                        .frame(width: 3, height: 11)
                     Text(title)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Color.hearthText)
                     Spacer()
-                    Text("(\(count))")
-                        .font(.caption.monospacedDigit().weight(.bold))
-                        .foregroundStyle(Color.hearthText.opacity(0.9))
-                        .contentTransition(.numericText())
-                        .animation(.spring(response: 0.35, dampingFraction: 1.0), value: count)
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    if showsCount {
+                        Text("\(count)")
+                            .font(.caption.monospacedDigit().weight(.bold))
+                            .foregroundStyle(Color.hearthText.opacity(0.9))
+                            .contentTransition(.numericText())
+                            .animation(HearthChrome.Motion.optional(.spring(response: 0.28, dampingFraction: 0.9)), value: count)
+                    }
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Color.hearthText.opacity(0.75))
+                        .foregroundStyle(Color.hearthText.opacity(0.7))
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(tint.opacity(0.24), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(tint.opacity(0.35), lineWidth: 1)
-                )
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(tint.opacity(0.2), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 3) {
+            if expanded {
+                VStack(alignment: .leading, spacing: 2) {
                     content
                 }
-                .padding(6)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.black.opacity(0.24))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.04), lineWidth: 1)
-                )
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .transition(.opacity)
             }
         }
+        .animation(HearthChrome.Motion.optional(.easeOut(duration: 0.16)), value: expanded)
     }
 }
 
@@ -775,7 +772,7 @@ private struct OverlayCardRow: View {
             }
         }
         .padding(.horizontal, 6)
-        .padding(.vertical, 4)
+        .padding(.vertical, 3)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(rowBackground)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))

@@ -76,18 +76,51 @@ struct OpponentInferenceView: View {
     let cards: [TrackedCard]
     let deckCount: Int?
     let catalog: CardCatalog?
+    var extraOnly: Bool = false
 
     var body: some View {
-        if cards.isEmpty && (deckCount ?? 0) == 0 {
+        if extraOnly {
+            extraBody
+        } else if cards.isEmpty && (deckCount ?? 0) == 0 {
             EmptyView()
         } else {
             inferenceBody
         }
     }
 
+    /// Overlay mode: the zone lists already show revealed and in-deck cards.
+    /// Only the guessed second copies are extra.
+    @ViewBuilder
+    private var extraBody: some View {
+        let lines = OpponentInference.lines(cards: cards, deckCount: deckCount, catalog: catalog)
+            .likely.filter { $0.confidence == .inferred }
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(HearthChrome.L("推测还可能有", "Maybe still in deck"))
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Color.gold)
+                    .help(HearthChrome.L(
+                        "非传说且只见过一张。没有对上完整牌库，所以只是猜测。",
+                        "Non-legendary and seen once. The deck list was not matched, so this is a guess."
+                    ))
+                ForEach(lines.prefix(6)) { row in
+                    HStack(spacing: 4) {
+                        Text(row.name).lineLimit(1).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.hearthText)
+                        Spacer(minLength: 4)
+                        Text(row.detail).font(.caption2).foregroundStyle(Color.mist)
+                        Text(InferenceConfidence.inferred.title)
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(Color.onGold)
+                    }
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+    }
+
     private var inferenceBody: some View {
         let built = OpponentInference.lines(cards: cards, deckCount: deckCount, catalog: catalog)
-        VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 6) {
             Text(HearthChrome.L("对手牌推断", "Opponent inference"))
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Color.hearthText)
@@ -129,11 +162,7 @@ struct OpponentInferenceView: View {
             Text(title)
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(Color.gold)
-            if rows.isEmpty {
-                Text(HearthChrome.L("暂无", "None"))
-                    .font(.caption2)
-                    .foregroundStyle(Color.mist)
-            } else {
+            if !rows.isEmpty {
                 ForEach(rows.prefix(8)) { row in
                     HStack(spacing: 4) {
                         Text(row.name).lineLimit(1).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.hearthText)
@@ -196,29 +225,29 @@ struct MulliganAdviceView: View {
     let hints: [MulliganAdvice.Hint]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(HearthChrome.L("起手建议", "Mulligan"))
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.hearthText)
-            Text(HearthChrome.L(
-                "只按费用启发，不是胜率模型。可在设置里关掉。",
-                "Cost heuristic only, not a win-rate model. Turn it off in Settings."
-            ))
-            .font(.system(size: 9))
-            .foregroundStyle(Color.mist)
-            ForEach(hints) { hint in
-                HStack {
-                    Text(hint.keep ? HearthChrome.L("留", "Keep") : HearthChrome.L("换", "Toss"))
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(hint.keep ? Color.mint : Color.gold)
-                        .frame(width: 22)
-                    Text(hint.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.hearthText).lineLimit(1)
-                    Spacer()
-                }
+        let keep = hints.filter(\.keep).map(\.name).joined(separator: " ")
+        let toss = hints.filter { !$0.keep }.map(\.name).joined(separator: " ")
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if !keep.isEmpty {
+                Text(HearthChrome.L("留", "Keep"))
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color.mint)
+                Text(keep)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.hearthText)
+                    .lineLimit(2)
+            }
+            if !toss.isEmpty {
+                Text(HearthChrome.L("换", "Toss"))
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color.gold)
+                Text(toss)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.hearthText)
+                    .lineLimit(2)
             }
         }
-        .padding(8)
-        .background(Color.inkDeep.opacity(0.45), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .help(HearthChrome.L("只按费用，不是胜率模型。", "Cost only, not a win-rate model."))
     }
 }
 
@@ -227,44 +256,47 @@ struct MulliganAdviceView: View {
 struct PaceCompareView: View {
     let curve: [Int]
     let turns: [TurnLog]
+    var compact: Bool = false
 
     var body: some View {
         let points = turns.map { turn in
             (turn.turn, turn.friendlyPlays.reduce(0) { $0 + $1.cost * max($1.copies, 1) }, min(max(turn.turn, 1), 10))
         }
-        VStack(alignment: .leading, spacing: 6) {
-            Text(HearthChrome.L("构筑曲线与本局节奏", "Curve vs pace"))
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.hearthText)
-            Text(HearthChrome.L(
-                "灰条是该回合可用法力（回合数，最高 10）。金条是本局打出牌的费用合计，不含英雄技能。",
-                "Gray is mana available that turn (turn number, max 10). Gold is the cost of cards you played, not hero power."
-            ))
-            .font(.system(size: 9))
-            .foregroundStyle(Color.mist)
-            .fixedSize(horizontal: false, vertical: true)
-            if !curve.isEmpty {
-                HStack(alignment: .bottom, spacing: 3) {
-                    ForEach(Array(curve.prefix(8).enumerated()), id: \.offset) { index, count in
-                        VStack(spacing: 1) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(Color.gold.opacity(0.8))
-                                .frame(height: CGFloat(max(count, 0)) * 4 + 2)
-                            Text(index == 7 ? "7+" : "\(index)")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(Color.mist)
+        VStack(alignment: .leading, spacing: compact ? 3 : 6) {
+            if !compact {
+                Text(HearthChrome.L("构筑曲线与本局节奏", "Curve vs pace"))
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.hearthText)
+                Text(HearthChrome.L(
+                    "灰条是该回合可用法力（回合数，最高 10）。金条是本局打出牌的费用合计，不含英雄技能。",
+                    "Gray is mana available that turn (turn number, max 10). Gold is the cost of cards you played, not hero power."
+                ))
+                .font(.system(size: 9))
+                .foregroundStyle(Color.mist)
+                .fixedSize(horizontal: false, vertical: true)
+                if !curve.isEmpty {
+                    HStack(alignment: .bottom, spacing: 3) {
+                        ForEach(Array(curve.prefix(8).enumerated()), id: \.offset) { index, count in
+                            VStack(spacing: 1) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color.gold.opacity(0.8))
+                                    .frame(height: CGFloat(max(count, 0)) * 4 + 2)
+                                Text(index == 7 ? "7+" : "\(index)")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(Color.mist)
+                            }
+                            .frame(maxWidth: .infinity)
                         }
-                        .frame(maxWidth: .infinity)
                     }
+                    .frame(height: 42)
                 }
-                .frame(height: 42)
             }
-            if points.isEmpty {
+            if points.isEmpty && !compact {
                 Text(HearthChrome.L("本局还没有打出记录", "No plays recorded yet"))
                     .font(.caption2)
                     .foregroundStyle(Color.mist)
-            } else {
-                ForEach(points, id: \.0) { turn, spent, available in
+            } else if !points.isEmpty {
+                ForEach(compact ? Array(points.suffix(6)) : points, id: \.0) { turn, spent, available in
                     HStack(spacing: 6) {
                         Text("T\(turn)")
                             .font(.caption2.monospacedDigit().weight(.bold))
@@ -279,7 +311,7 @@ struct PaceCompareView: View {
                                 Capsule().fill(spent > available ? Color.gold : Color.mint).frame(width: max(spentW, spent > 0 ? 4 : 0))
                             }
                         }
-                        .frame(height: 8)
+                        .frame(height: 6)
                         Text("\(spent)/\(available)")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(Color.mist)
@@ -288,8 +320,16 @@ struct PaceCompareView: View {
                 }
             }
         }
-        .padding(8)
-        .background(Color.inkDeep.opacity(0.45), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(compact ? 2 : 8)
+        .background {
+            if !compact {
+                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.inkDeep.opacity(0.45))
+            }
+        }
+        .help(HearthChrome.L(
+            "灰条是可用法力，金条是打出牌的费用，不含英雄技能。",
+            "Gray is mana available. Gold is the cost of cards played, not hero power."
+        ))
     }
 }
 
@@ -507,6 +547,7 @@ struct UpdateNotesSection: View {
 
 // MARK: - Diagnostics
 
+@MainActor
 enum DiagnosticsReport {
     static func text(store: MatchStore) -> String {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

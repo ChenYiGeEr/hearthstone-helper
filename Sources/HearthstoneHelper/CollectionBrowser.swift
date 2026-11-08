@@ -29,13 +29,17 @@ struct CollectionBrowser: View {
     private var catalog: CardCatalog? { store.cardData.catalog }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             header
             filterRows
-            CollectionGrid(
-                cardIDs: pageCards,
-                store: store
-            )
+            if results.isEmpty {
+                collectionEmpty
+            } else {
+                CollectionGrid(
+                    cardIDs: pageCards,
+                    store: store
+                )
+            }
             pager
         }
         .padding(28)
@@ -144,18 +148,30 @@ struct CollectionBrowser: View {
     @State private var collectionMode = false
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .center, spacing: 14) {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.gold, Color.gold.opacity(0.4)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 4, height: 44)
             VStack(alignment: .leading, spacing: 4) {
                 Text(isStandard ? "卡牌图鉴 · 标准" : "卡牌图鉴 · 狂野")
                     .font(.system(size: 27, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                 HStack(spacing: 8) {
                     Text("共 \(results.count) 张")
-                        .font(.caption)
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.mist)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.inkLift, in: Capsule())
                     if collectionMode, let coll = store.live.collection {
                         Text("粉尘 \(coll.dust) · 金币 \(coll.gold)")
-                            .font(.caption.monospacedDigit())
+                            .font(.caption.monospacedDigit().weight(.semibold))
                             .foregroundStyle(Color.gold)
                     }
                 }
@@ -166,7 +182,7 @@ struct CollectionBrowser: View {
                 Text("我的收藏").tag(true)
             }
             .pickerStyle(.segmented)
-            .frame(width: 150)
+            .frame(width: 168)
             .onChange(of: collectionMode) { _, _ in
                 if collectionMode { store.live.fetchCollectionIfNeeded() }
                 recompute()
@@ -184,10 +200,37 @@ struct CollectionBrowser: View {
                     }
                 }
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(Color.gold)
+                .foregroundStyle(Color.ink)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.gold, in: Capsule())
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private var collectionEmpty: some View {
+        let waiting = catalog == nil || (classCounts.isEmpty && !collectionMode && !isActiveFilter)
+        return VStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.gold.opacity(0.1))
+                    .frame(width: 76, height: 76)
+                Circle()
+                    .strokeBorder(Color.gold.opacity(0.35), lineWidth: 1)
+                    .frame(width: 76, height: 76)
+                Image(systemName: waiting ? "square.stack.3d.up" : "magnifyingglass")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(Color.gold)
+            }
+            Text(waiting ? "卡牌数据尚未就绪" : "没有符合条件的卡")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+            Text(waiting ? "本地卡牌缓存就绪后，图鉴会显示在这里" : "试试放宽筛选，或切换标准 / 狂野")
+                .font(.caption)
+                .foregroundStyle(Color.mist)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var isActiveFilter: Bool {
@@ -214,6 +257,15 @@ struct CollectionBrowser: View {
             chipRow(values: chipCounts["cost"] ?? [], selection: costsLabels, key: nil, tint: .mint)
             chipRow(values: chipCounts["mechanic"] ?? [], selection: $mechanics, key: "mechanic", tint: .mint)
         }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.inkLift.opacity(0.55))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.gold.opacity(0.18), lineWidth: 1)
+        )
     }
 
     /// 费用筛选以显示名存储（"7+" ↔ bucket 7）。
@@ -280,13 +332,15 @@ struct CollectionBrowser: View {
                 }
             }
             .disabled(page == 0)
+            .opacity(page == 0 ? 0.35 : 1)
 
             Text("\(page + 1) / \(pageCount)")
                 .font(.caption.monospacedDigit().weight(.bold))
                 .foregroundStyle(.white)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 12)
                 .padding(.vertical, 5)
                 .background(Color.inkLift, in: Capsule())
+                .overlay(Capsule().strokeBorder(Color.gold.opacity(0.28), lineWidth: 1))
 
             pagerButton("chevron.right") {
                 if page < pageCount - 1 {
@@ -295,7 +349,9 @@ struct CollectionBrowser: View {
                 }
             }
             .disabled(page >= pageCount - 1)
+            .opacity(page >= pageCount - 1 ? 0.35 : 1)
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func pagerButton(_ symbol: String, action: @escaping () -> Void) -> some View {
@@ -345,7 +401,11 @@ private struct CollectionGrid: View {
                 Image(nsImage: image)
                     .resizable()
                     .frame(width: 260, height: 260 * 776.0 / 512.0)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.gold.opacity(0.85), lineWidth: 1.5)
+                    )
                     .shadow(color: .black.opacity(0.6), radius: 18, y: 6)
                     .padding(hoverIsOnRightSide ? .leading : .trailing, 24)
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
@@ -369,7 +429,7 @@ private struct CollectionGrid: View {
                     .resizable()
                     .aspectRatio(512.0 / 776.0, contentMode: .fit)
             } else {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(Color.inkLift)
                     .aspectRatio(512.0 / 776.0, contentMode: .fit)
                     .overlay(
@@ -385,11 +445,10 @@ private struct CollectionGrid: View {
                     .opacity(loadingPulse ? 0.55 : 1.0)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color.gold, lineWidth: isHovered ? 2 : 0)
-                .shadow(color: .black.opacity(0.4), radius: 4)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(isHovered ? Color.gold : Color.white.opacity(0.14), lineWidth: isHovered ? 2 : 1)
         )
         .scaleEffect(isHovered ? 1.04 : 1)
         .shadow(color: .black.opacity(isHovered ? 0.45 : 0.2), radius: isHovered ? 8 : 3, y: isHovered ? 4 : 2)
@@ -418,6 +477,7 @@ struct FilterChipTinted: View {
     let tint: Color
     let isOn: Bool
     let action: () -> Void
+    @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
@@ -425,23 +485,34 @@ struct FilterChipTinted: View {
                 Circle().fill(tint).frame(width: 5, height: 5)
                 Text(label)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(isOn ? 1 : 0.82))
+                    .foregroundStyle(.white.opacity(isOn || hovering ? 1 : 0.82))
                 Text("\(count)")
                     .font(.system(size: 10, weight: .bold).monospacedDigit())
                     .foregroundStyle(isOn ? tint : Color.mist)
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
-            .background(Capsule().fill(isOn ? tint.opacity(0.28) : Color(red: 14 / 255, green: 22 / 255, blue: 29 / 255).opacity(0.55)))
-            .overlay(Capsule().strokeBorder(isOn ? tint.opacity(0.8) : Color.mist.opacity(0.25), lineWidth: 1))
+            .background(
+                Capsule().fill(
+                    isOn ? tint.opacity(0.32) : (hovering ? Color.white.opacity(0.07) : Color.inkDeep.opacity(0.55))
+                )
+            )
+            .overlay(
+                Capsule().strokeBorder(
+                    isOn ? tint.opacity(0.9) : (hovering ? tint.opacity(0.45) : Color.mist.opacity(0.28)),
+                    lineWidth: 1
+                )
+            )
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 
 private extension Color {
-    static let gold = Color(red: 214 / 255, green: 168 / 255, blue: 93 / 255)
-    static let mint = Color(red: 105 / 255, green: 200 / 255, blue: 176 / 255)
-    static let mist = Color(red: 142 / 255, green: 162 / 255, blue: 176 / 255)
-    static let inkLift = Color(red: 23 / 255, green: 38 / 255, blue: 48 / 255)
+    static let gold = Color(red: 224 / 255, green: 176 / 255, blue: 96 / 255)
+    static let mint = Color(red: 112 / 255, green: 206 / 255, blue: 176 / 255)
+    static let mist = Color(red: 158 / 255, green: 176 / 255, blue: 188 / 255)
+    static let inkLift = Color(red: 20 / 255, green: 34 / 255, blue: 44 / 255)
+    static let inkDeep = Color(red: 8 / 255, green: 14 / 255, blue: 20 / 255)
 }

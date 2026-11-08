@@ -200,7 +200,13 @@ struct PlayerOverlayPanel: View {
                 Spacer()
             }
             .font(.caption2.weight(.bold).monospacedDigit())
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.lineSoft, lineWidth: 1)
+            )
         }
     }
 }
@@ -256,19 +262,25 @@ private func zoneGroup(
             if unknown > 0 {
                 HStack(spacing: 8) {
                     Image(systemName: "eye.slash")
-                        .font(.system(size: 10))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(Color.mistSoft)
+                        .frame(width: 19, height: 19)
+                        .background(Color.white.opacity(0.06), in: Circle())
                     Text("未知卡牌")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.mistSoft)
                     Spacer()
                     Text("×\(unknown)")
-                        .font(.caption2.monospacedDigit())
+                        .font(.caption2.monospacedDigit().weight(.bold))
                         .foregroundStyle(Color.mistSoft)
                 }
-                .padding(.horizontal, 5)
-                .padding(.vertical, 3)
-                .background(Color.inkDeep.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(Color.inkDeep.opacity(0.55), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color.lineSoft, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                )
             }
         }
     }
@@ -303,13 +315,16 @@ private extension OpponentOverlayPanel {
         let outcome = previous.result == .win ? "胜" : previous.result == .loss ? "负" : "平"
         HStack(spacing: 5) {
             Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 9))
+                .font(.system(size: 9, weight: .bold))
             Text("再遇 \(previous.startedAt.formatted(.dateTime.month().day()))：你\(outcome)")
                 .lineLimit(1)
         }
-        .font(.caption2)
-        .foregroundStyle(Color.mistSoft)
-        .padding(.horizontal, 4)
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(Color.goldSoft)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.goldSoft.opacity(0.14), in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.goldSoft.opacity(0.32), lineWidth: 1))
     }
 
     /// 上一局见到的牌。有 cardID、不是纯场面衍生物。这一局已经见过的也留着。
@@ -378,12 +393,16 @@ private extension OpponentOverlayPanel {
                             .background(Color.goldSoft, in: Circle())
                         Text(catalog.displayName(for: cardID))
                             .font(.system(size: 12, weight: triggered ? .regular : .semibold))
-                            .foregroundStyle(triggered ? Color.mistSoft.opacity(0.6) : .white)
+                            .foregroundStyle(triggered ? Color.mistSoft.opacity(0.7) : .white)
                             .strikethrough(triggered, color: .mistSoft)
                         Spacer()
                     }
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(
+                        Color.inkDeep.opacity(triggered ? 0.28 : 0.5),
+                        in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    )
                 }
             }
         }
@@ -424,7 +443,10 @@ private struct OverlayPanelShell<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(accent)
+                    .frame(width: 3, height: 28)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -433,36 +455,66 @@ private struct OverlayPanelShell<Content: View>: View {
                     Text(subtitle)
                         .font(.caption2)
                         .foregroundStyle(Color.mistSoft)
+                        .lineLimit(1)
                 }
                 Spacer()
                 Image(systemName: "line.3.horizontal")
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(Color.mistSoft.opacity(0.8))
-                Circle().fill(accent).frame(width: 7, height: 7)
+                    .foregroundStyle(Color.mistSoft)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 5)
+                    .background(Color.white.opacity(0.06), in: Capsule())
+                Circle()
+                    .fill(accent)
+                    .frame(width: 7, height: 7)
+                    .shadow(color: accent.opacity(0.8), radius: 4)
             }
             .overlay {
                 OverlayDragHandle()
             }
 
-            Divider().overlay(Color.lineSoft)
-
             content
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.inkDeep.opacity(store.overlayBackgroundOpacity), in: RoundedRectangle(cornerRadius: 18))
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .background(Color.inkDeep.opacity(store.overlayBackgroundOpacity), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(alignment: .top) {
+            LinearGradient(
+                colors: [accent, accent.opacity(0.15)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(height: 3)
+            .padding(.horizontal, 22)
+            .padding(.top, 7)
+            .allowsHitTesting(false)
+        }
         .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .strokeBorder(Color.lineSoft, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [accent.opacity(0.75), Color.lineSoft, accent.opacity(0.18)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+                .allowsHitTesting(false)
         )
         .overlay(alignment: .trailing) {
             hoverPreview
         }
         .overlay(alignment: .bottomTrailing) {
-            OverlayResizeGrip()
-                .frame(width: 18, height: 18)
-                .padding(6)
+            ZStack {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(Color.mistSoft.opacity(0.8))
+                    .allowsHitTesting(false)
+                OverlayResizeGrip()
+            }
+            .frame(width: 18, height: 18)
+            .padding(6)
         }
     }
 
@@ -476,8 +528,12 @@ private struct OverlayPanelShell<Content: View>: View {
             Image(nsImage: image)
                 .resizable()
                 .frame(width: 232, height: 232 * 388.0 / 256.0)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: .black.opacity(0.55), radius: 14, y: 4)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.goldSoft.opacity(0.85), lineWidth: 1.5)
+                )
+                .shadow(color: .black.opacity(0.55), radius: 16, y: 6)
                 .padding(.trailing, 14)
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 .animation(.spring(response: 0.3, dampingFraction: 1.0), value: hoveredCardID)
@@ -526,8 +582,13 @@ private struct SideStatsBar: View {
             }
         }
         .font(.system(size: 11, weight: .bold).monospacedDigit())
-        .padding(.horizontal, 4)
-        .padding(.bottom, 2)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+        )
     }
 
     private func item(_ label: String, _ value: Int?, tint: Color, suffix: String? = nil) -> some View {
@@ -565,6 +626,9 @@ private struct OverlaySection<Content: View>: View {
                 }
             } label: {
                 HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(.white.opacity(0.9))
+                        .frame(width: 3, height: 12)
                     Text(title)
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.white)
@@ -576,11 +640,15 @@ private struct OverlaySection<Content: View>: View {
                         .animation(.spring(response: 0.35, dampingFraction: 1.0), value: count)
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(.white.opacity(0.75))
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(tint.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
+                .background(tint.opacity(0.24), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(tint.opacity(0.35), lineWidth: 1)
+                )
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -591,8 +659,12 @@ private struct OverlaySection<Content: View>: View {
                 }
                 .padding(6)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.black.opacity(0.22))
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.black.opacity(0.24))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.04), lineWidth: 1)
                 )
             }
         }
@@ -606,6 +678,7 @@ private struct OverlayCardRow: View {
     var trailing: String?
     let store: MatchStore
     @Binding var hoveredCardID: String?
+    @State private var hovering = false
 
     private var lookupID: String {
         card.cardID ?? card.name
@@ -652,10 +725,15 @@ private struct OverlayCardRow: View {
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(rowBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(Color.white.opacity(hovering ? 0.88 : 0), lineWidth: 1)
+        )
         .contentShape(Rectangle())
-        .onHover { hovering in
-            if hovering {
+        .onHover { isHovering in
+            hovering = isHovering
+            if isHovering {
                 hoveredCardID = lookupID
             } else if hoveredCardID == lookupID {
                 hoveredCardID = nil
@@ -692,18 +770,23 @@ private struct OverlayEmpty: View {
     let text: String
 
     var body: some View {
-        Text(text)
-            .font(.caption2)
-            .foregroundStyle(Color.mistSoft.opacity(0.8))
-            .padding(.vertical, 2)
-            .padding(.horizontal, 6)
+        HStack(spacing: 6) {
+            Image(systemName: "square.dashed")
+                .font(.system(size: 10, weight: .semibold))
+            Text(text)
+        }
+        .font(.caption2)
+        .foregroundStyle(Color.mistSoft.opacity(0.85))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 4)
     }
 }
 
 private extension Color {
-    static let inkDeep = Color(red: 14 / 255, green: 22 / 255, blue: 29 / 255)
-    static let goldSoft = Color(red: 214 / 255, green: 168 / 255, blue: 93 / 255)
-    static let mintSoft = Color(red: 105 / 255, green: 200 / 255, blue: 176 / 255)
-    static let mistSoft = Color(red: 142 / 255, green: 162 / 255, blue: 176 / 255)
-    static let lineSoft = Color(red: 83 / 255, green: 111 / 255, blue: 125 / 255).opacity(0.5)
+    static let inkDeep = Color(red: 8 / 255, green: 14 / 255, blue: 20 / 255)
+    static let goldSoft = Color(red: 224 / 255, green: 176 / 255, blue: 96 / 255)
+    static let mintSoft = Color(red: 112 / 255, green: 206 / 255, blue: 176 / 255)
+    static let mistSoft = Color(red: 158 / 255, green: 176 / 255, blue: 188 / 255)
+    static let lineSoft = Color(red: 126 / 255, green: 154 / 255, blue: 168 / 255).opacity(0.38)
 }

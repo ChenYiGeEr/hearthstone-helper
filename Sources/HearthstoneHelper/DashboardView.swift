@@ -1425,7 +1425,7 @@ struct DashboardView: View {
     }
 
     private var comboNote: String? {
-        guard let hoveredCardID else { return nil }
+        guard hoveredCardID != nil else { return nil }
         return HearthChrome.L("金色边框 = 与此卡有配合", "Gold border = combos with this card")
     }
 

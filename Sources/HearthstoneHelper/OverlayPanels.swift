@@ -177,17 +177,14 @@ struct PlayerOverlayPanel: View {
             }
 
             OverlayScrollView {
-                zoneGroup(
-                    HearthChrome.L("牌库", "Deck"),
-                    tint: .goldSoft,
-                    total: mergedFriendlyStats?.deckCount,
+                friendlyDeckSection(
                     cards: match.playerRemainingCards.sorted {
                         $0.cost == $1.cost ? $0.name < $1.name : $0.cost < $1.cost
                     },
+                    total: mergedFriendlyStats?.deckCount,
+                    matchID: match.id,
                     store: store,
                     hoveredCardID: $hoveredCardID,
-                    showsCount: false,
-                    animated: HearthChrome.motion != .off,
                     trailing: { card in
                         var parts: [String] = []
                         if card.origin != .original { parts.append(HearthChrome.phrase("洗入")) }
@@ -311,6 +308,380 @@ private func zoneGroup(
                 .padding(.vertical, 3)
             }
         }
+    }
+}
+
+/// Right-overlay remaining deck. Draw and shuffle are one-shot horizontal
+/// offsets on a stable row id. Opacity stays 1 so a log update outside
+/// `withAnimation` cannot leave the row invisible.
+@MainActor
+@ViewBuilder
+private func friendlyDeckSection(
+    cards: [TrackedCard],
+    total: Int?,
+    matchID: UUID,
+    store: MatchStore,
+    hoveredCardID: Binding<String?>,
+    trailing: @escaping (TrackedCard) -> String?
+) -> some View {
+    let revealed = cards.reduce(0) { $0 + $1.copies }
+    let unknown = max((total ?? revealed) - revealed, 0)
+    let animated = HearthChrome.motion != .off
+    OverlaySection(
+        title: HearthChrome.L("牌库", "Deck"),
+        count: revealed + unknown,
+        tint: .goldSoft,
+        showsCount: false
+    ) {
+        FriendlyDeckList(
+            cards: cards,
+            matchID: matchID,
+            store: store,
+            hoveredCardID: hoveredCardID,
+            trailing: trailing
+        )
+        if unknown > 0 {
+            HStack(spacing: 6) {
+                Text(HearthChrome.L("未知", "Unknown"))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.mistSoft)
+                Spacer()
+                Text("×\(unknown)")
+                    .font(.caption2.monospacedDigit().weight(.bold))
+                    .foregroundStyle(Color.mistSoft)
+                    .contentTransition(.numericText())
+                    .animation(animated ? HearthChrome.Motion.optional(.easeOut(duration: 0.18)) : nil, value: unknown)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+        }
+    }
+}
+
+/// How far a deck row travels for one draw or shuffle.
+private enum DeckRowMotion {
+    static var travel: CGFloat {
+        switch HearthChrome.motion {
+        case .off: 0
+        case .light: 72
+        case .flashy: 160
+        }
+    }
+
+    static var animation: Animation {
+        switch HearthChrome.motion {
+        case .off: .linear(duration: 0)
+        case .light: .easeOut(duration: 0.22)
+        case .flashy: .spring(response: 0.42, dampingFraction: 0.86)
+        }
+    }
+
+    /// More than a mulligan's worth of membership change is a deck reload, not
+    /// a draw or a shuffle.
+    static let bulkLimit = 8
+}
+
+private struct DeckDeparture: Identifiable {
+    let id: UUID
+    let rowID: String
+    let card: TrackedCard
+    let trailing: String?
+}
+
+private enum DeckRowItem: Identifiable {
+    case live(TrackedCard)
+    case leave(DeckDeparture)
+
+    var id: String {
+        switch self {
+        case .live(let card): card.overlayRowID
+        case .leave(let departure): "leave|\(departure.id.uuidString)"
+        }
+    }
+}
+
+private struct FriendlyDeckList: View {
+    let cards: [TrackedCard]
+    let matchID: UUID
+    let store: MatchStore
+    @Binding var hoveredCardID: String?
+    let trailing: (TrackedCard) -> String?
+
+    @State private var seededMatch: UUID?
+    @State private var previousCards: [String: TrackedCard] = [:]
+    @State private var departures: [DeckDeparture] = []
+    @State private var shuffleToken: [String: Int] = [:]
+
+    private var signature: String {
+        cards.map { "\($0.overlayRowID):\($0.copies)" }.sorted().joined(separator: ",")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(rowItems) { item in
+                switch item {
+                case .live(let card):
+                    DeckLiveRow(
+                        card: card,
+                        trailing: trailing(card),
+                        store: store,
+                        hoveredCardID: $hoveredCardID,
+                        matchID: matchID,
+                        shuffleToken: shuffleToken[card.overlayRowID] ?? 0,
+                        incoming: isIncoming(card)
+                    )
+                    .transition(.identity)
+                case .leave(let departure):
+                    DeckLeaveRow(
+                        card: departure.card,
+                        trailing: departure.trailing,
+                        store: store,
+                        hoveredCardID: $hoveredCardID
+                    ) {
+                        departures.removeAll { $0.id == departure.id }
+                    }
+                    .transition(.identity)
+                }
+            }
+        }
+        .clipped()
+        .onAppear {
+            if seededMatch != matchID {
+                reseed()
+            }
+        }
+        .onChange(of: matchID) { _, _ in
+            reseed()
+        }
+        .onChange(of: signature) { _, _ in
+            applyDiff()
+        }
+    }
+
+    private var rowItems: [DeckRowItem] {
+        var items: [DeckRowItem] = []
+        var placed: Set<UUID> = []
+        for card in cards {
+            items.append(.live(card))
+            for departure in departures where departure.rowID == card.overlayRowID {
+                items.append(.leave(departure))
+                placed.insert(departure.id)
+            }
+        }
+        for departure in departures where !placed.contains(departure.id) {
+            let index = items.firstIndex { item in
+                let other = item.sortKey
+                return departure.sortKey < other
+            } ?? items.endIndex
+            items.insert(.leave(departure), at: index)
+        }
+        return items
+    }
+
+    private func isIncoming(_ card: TrackedCard) -> Bool {
+        guard seededMatch == matchID, HearthChrome.motion != .off, !isBulkChange else { return false }
+        let old = previousCards[card.overlayRowID]?.copies ?? 0
+        return card.copies > old
+    }
+
+    private var isBulkChange: Bool {
+        guard seededMatch == matchID else { return false }
+        var moving = 0
+        for card in cards {
+            let old = previousCards[card.overlayRowID]?.copies ?? 0
+            if card.copies > old { moving += card.copies - old }
+        }
+        for (id, card) in previousCards {
+            let newCopies = cards.first { $0.overlayRowID == id }?.copies ?? 0
+            if card.copies > newCopies { moving += card.copies - newCopies }
+        }
+        return moving > DeckRowMotion.bulkLimit
+    }
+
+    private func reseed() {
+        seededMatch = matchID
+        previousCards = Dictionary(cards.map { ($0.overlayRowID, $0) }, uniquingKeysWith: { $1 })
+        departures = []
+        shuffleToken = [:]
+    }
+
+    private func applyDiff() {
+        if seededMatch != matchID {
+            reseed()
+            return
+        }
+        let next = Dictionary(cards.map { ($0.overlayRowID, $0) }, uniquingKeysWith: { $1 })
+        var added = 0
+        var removed = 0
+        for (id, card) in next {
+            let old = previousCards[id]?.copies ?? 0
+            if card.copies > old { added += card.copies - old }
+        }
+        for (id, card) in previousCards {
+            let new = next[id]?.copies ?? 0
+            if card.copies > new { removed += card.copies - new }
+        }
+        let moving = added + removed
+        guard HearthChrome.motion != .off, moving > 0, moving <= DeckRowMotion.bulkLimit else {
+            previousCards = next
+            return
+        }
+        for (id, card) in next {
+            let old = previousCards[id]?.copies ?? 0
+            if card.copies > old {
+                shuffleToken[id, default: 0] += 1
+            }
+        }
+        for (id, card) in previousCards {
+            let newCopies = next[id]?.copies ?? 0
+            let gone = card.copies - newCopies
+            guard gone > 0 else { continue }
+            let shown = leavingCopy(of: next[id] ?? card)
+            for _ in 0..<gone {
+                departures.append(DeckDeparture(
+                    id: UUID(),
+                    rowID: id,
+                    card: shown,
+                    trailing: trailing(shown)
+                ))
+            }
+        }
+        previousCards = next
+    }
+
+    /// One physical card leaving the stack. The live row keeps the real count.
+    private func leavingCopy(of card: TrackedCard) -> TrackedCard {
+        TrackedCard(
+            name: card.name,
+            cardID: card.cardID,
+            cost: card.cost,
+            copies: 1,
+            origin: card.origin,
+            playedTurn: card.playedTurn,
+            sourceTrail: card.sourceTrail,
+            isBoardOnly: card.isBoardOnly,
+            currentZone: card.currentZone
+        )
+    }
+}
+
+private extension DeckRowItem {
+    var sortKey: (Int, String, Int) {
+        switch self {
+        case .live(let card): (card.cost, card.name, 0)
+        case .leave(let departure): (departure.card.cost, departure.card.name, 1)
+        }
+    }
+}
+
+private extension DeckDeparture {
+    var sortKey: (Int, String, Int) { (card.cost, card.name, 1) }
+}
+
+/// Shuffle-in: the row starts to the left and slides right into its slot.
+/// The resting offset is always 0, and opacity is never animated.
+private struct DeckLiveRow: View {
+    let card: TrackedCard
+    let trailing: String?
+    let store: MatchStore
+    @Binding var hoveredCardID: String?
+    let matchID: UUID
+    let shuffleToken: Int
+    /// True on the frame the copy count goes up, before the snapshot catches up.
+    let incoming: Bool
+
+    @State private var x: CGFloat = 0
+    @State private var playedToken = 0
+    @State private var armedWave = 0
+    @State private var playedMatch: UUID?
+    /// Bumps after the row is parked to the left, so the slide home starts
+    /// from that frame instead of being batched away.
+    @State private var launch = 0
+
+    private var shownX: CGFloat {
+        if launch == 0 && incoming && HearthChrome.motion != .off {
+            return -DeckRowMotion.travel
+        }
+        return x
+    }
+
+    var body: some View {
+        OverlayCardRow(card: card, trailing: trailing, store: store, hoveredCardID: $hoveredCardID)
+            .offset(x: shownX)
+            .onAppear { playShuffle() }
+            .onChange(of: shuffleToken) { _, _ in playShuffle() }
+            .onChange(of: incoming) { _, _ in playShuffle() }
+            .onChange(of: matchID) { _, _ in
+                playedMatch = matchID
+                playedToken = 0
+                armedWave = 0
+                launch = 0
+                x = 0
+            }
+            .onChange(of: launch) { _, launch in
+                guard launch > 0 else { return }
+                withAnimation(DeckRowMotion.animation) {
+                    x = 0
+                }
+            }
+    }
+
+    private func playShuffle() {
+        if playedMatch != matchID {
+            playedMatch = matchID
+            playedToken = 0
+            armedWave = 0
+            launch = 0
+            x = 0
+        }
+        let wave = max(shuffleToken, incoming ? playedToken + 1 : playedToken)
+        guard wave > armedWave else { return }
+        armedWave = wave
+        if shuffleToken > playedToken {
+            playedToken = shuffleToken
+        }
+        guard HearthChrome.motion != .off else {
+            x = 0
+            return
+        }
+        x = -DeckRowMotion.travel
+        launch += 1
+    }
+}
+
+/// Draw: a one-shot copy of the row slides left, then leaves the list.
+/// Opacity stays 1 for the whole slide.
+private struct DeckLeaveRow: View {
+    let card: TrackedCard
+    let trailing: String?
+    let store: MatchStore
+    @Binding var hoveredCardID: String?
+    let onDone: () -> Void
+
+    @State private var x: CGFloat = 0
+    @State private var started = false
+
+    var body: some View {
+        OverlayCardRow(card: card, trailing: trailing, store: store, hoveredCardID: $hoveredCardID)
+            .offset(x: x)
+            .allowsHitTesting(false)
+            .onAppear {
+                guard !started else { return }
+                started = true
+                guard HearthChrome.motion != .off else {
+                    onDone()
+                    return
+                }
+                let delay: TimeInterval = HearthChrome.motion == .flashy ? 0.5 : 0.26
+                withAnimation(DeckRowMotion.animation) {
+                    x = -DeckRowMotion.travel
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    MainActor.assumeIsolated {
+                        onDone()
+                    }
+                }
+            }
     }
 }
 

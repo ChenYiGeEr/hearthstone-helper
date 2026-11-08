@@ -12,16 +12,15 @@ struct DashboardView: View {
     @State private var showsMoreFilters = true
     @State private var showsCollection = true
     @State private var isStandardFormat = true
+    @State private var showsSettings = false
+    @State private var selectedImportID: UUID?
+    @State private var importDraft = ""
+    @State private var historyQuery = ""
+    @State private var historyOutcome = 0
     @Environment(\.colorScheme) private var systemScheme
 
     private var chromeContext: HearthContext {
-        let choice = AppearanceChoice(rawValue: store.appearanceChoice) ?? .dark
-        let language = InterfaceLanguage(rawValue: store.interfaceLanguage) ?? .chinese
-        return HearthChrome.context(
-            choice: choice,
-            systemIsLight: systemScheme == .light,
-            language: language
-        )
+        store.interfaceContext(systemIsLight: systemScheme == .light, overlay: false)
     }
 
     /// Multi-dimension card filters (dimensions AND together, values OR).
@@ -117,7 +116,7 @@ struct DashboardView: View {
                 endPoint: .bottom
             )
             .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.45), value: context.isLight)
+            .animation(HearthChrome.motion == .off ? nil : .easeInOut(duration: HearthChrome.motion == .flashy ? 0.45 : 0.22), value: context.isLight)
 
             RadialGradient(
                 colors: [Color.gold.opacity(context.isLight ? 0.10 : 0.16), Color.gold.opacity(0.04), .clear],
@@ -146,7 +145,7 @@ struct DashboardView: View {
             }
         }
         .onChange(of: selectedDeckID) { _, _ in
-            withAnimation(.spring(response: 0.3, dampingFraction: 1.0)) {
+            HearthChrome.Motion.run {
                 filters = DeckCardFilters()
             }
         }
@@ -218,8 +217,10 @@ struct DashboardView: View {
 
             // 全卡入口
             Button {
-                withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+                HearthChrome.Motion.run {
                     showsCollection = true
+                    showsSettings = false
+                    selectedImportID = nil
                 }
             } label: {
                 HStack(spacing: 10) {
@@ -301,10 +302,11 @@ struct DashboardView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 12)
-                .animation(.spring(response: 0.36, dampingFraction: 0.86), value: isStandardFormat)
+                .animation(HearthChrome.Motion.optional(.spring(response: 0.36, dampingFraction: 0.86)), value: isStandardFormat)
             }
 
             Spacer(minLength: 0)
+            importBlock
             settingsSection
         }
         .frame(width: 280)
@@ -324,7 +326,12 @@ struct DashboardView: View {
         }
         let grouped = Dictionary(grouping: filtered, by: \.className)
         return grouped
-            .map { ($0.key, $0.value.sorted { $0.name < $1.name }) }
+            .map { ($0.key, $0.value.sorted { lhs, rhs in
+                let left = store.deckMarks.isFavorite(lhs.id)
+                let right = store.deckMarks.isFavorite(rhs.id)
+                if left != right { return left && !right }
+                return lhs.name < rhs.name
+            }) }
             .sorted { $0.0 < $1.0 }
     }
 
@@ -333,12 +340,15 @@ struct DashboardView: View {
         let selected = selectedDeckID == deck.id
         let classTint = Self.classColor(deck.className)
 
-        return Button {
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
-                selectedDeckID = deck.id
-                showsCollection = false
-            }
-        } label: {
+        return HStack(spacing: 4) {
+            Button {
+                HearthChrome.Motion.run {
+                    selectedDeckID = deck.id
+                    showsCollection = false
+                    showsSettings = false
+                    selectedImportID = nil
+                }
+            } label: {
             HStack(spacing: 10) {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(
@@ -363,6 +373,12 @@ struct DashboardView: View {
                     Text("\(HearthChrome.phrase(deck.formatName)) · \(HearthChrome.phrase(deck.className)) · \(HearthChrome.L("\(deck.cardCount) 张", "\(deck.cardCount) cards"))")
                         .font(.caption2)
                         .foregroundStyle(Color.mist)
+                    if !store.deckMarks.tag(for: deck.id).isEmpty {
+                        Text(store.deckMarks.tag(for: deck.id))
+                            .font(.caption2)
+                            .foregroundStyle(Color.gold)
+                            .lineLimit(1)
+                    }
                 }
                 Spacer()
                 if stats.games > 0 {
@@ -384,6 +400,17 @@ struct DashboardView: View {
             }
         }
         .buttonStyle(.plain)
+            Button {
+                store.deckMarks.toggleFavorite(deck.id)
+            } label: {
+                Image(systemName: store.deckMarks.isFavorite(deck.id) ? "star.fill" : "star")
+                    .font(.caption)
+                    .foregroundStyle(store.deckMarks.isFavorite(deck.id) ? Color.gold : Color.mist)
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .help(HearthChrome.L("收藏", "Favorite"))
+        }
     }
 
     /// Class colors for deck badges and title accents.
@@ -463,75 +490,142 @@ struct DashboardView: View {
     // MARK: - Settings
 
     private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Text(HearthChrome.L("助手行为", "Settings"))
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(Color.mist)
-                Rectangle()
-                    .fill(Color.line)
-                    .frame(height: 1)
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                HearthChrome.Motion.run {
+                    showsSettings = true
+                    showsCollection = false
+                    selectedImportID = nil
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "gearshape.fill")
+                        .foregroundStyle(Color.gold)
+                    Text(HearthChrome.L("设置", "Settings"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.hearthText)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Color.mist)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .modifier(HoverHighlight(selected: showsSettings))
             }
-
-            Picker(HearthChrome.L("外观", "Appearance"), selection: Binding(
-                get: { store.appearanceChoice },
-                set: { store.appearanceChoice = $0 }
-            )) {
-                Text(HearthChrome.L("跟随系统", "System")).tag(AppearanceChoice.system.rawValue)
-                Text(HearthChrome.L("浅色", "Light")).tag(AppearanceChoice.light.rawValue)
-                Text(HearthChrome.L("深色", "Dark")).tag(AppearanceChoice.dark.rawValue)
-            }
-            .pickerStyle(.menu)
-
-            Picker(HearthChrome.L("语言", "Language"), selection: Binding(
-                get: { store.interfaceLanguage },
-                set: { store.interfaceLanguage = $0 }
-            )) {
-                Text("中文").tag(InterfaceLanguage.chinese.rawValue)
-                Text("English").tag(InterfaceLanguage.english.rawValue)
-            }
-            .pickerStyle(.menu)
-
-            Toggle(HearthChrome.L("登录 macOS 时自动启动", "Launch at login"), isOn: Binding(
-                get: { store.lifecycle.launchesAtLogin },
-                set: { store.lifecycle.setLaunchesAtLogin($0) }
+            .buttonStyle(.plain)
+            Text(HearthChrome.L(
+                "外观、动效、浮窗、登录启动和快捷键",
+                "Appearance, motion, overlays, login, and shortcuts"
             ))
-            Toggle(HearthChrome.L("炉石退出时自动退出助手", "Quit when Hearthstone quits"), isOn: Binding(
-                get: { store.lifecycle.quitsWithHearthstone },
-                set: { store.lifecycle.setQuitsWithHearthstone($0) }
-            ))
-            Toggle(HearthChrome.L("浮窗鼠标穿透（不挡游戏）", "Click through overlays"), isOn: Binding(
-                get: { store.isOverlayPassthrough },
-                set: { store.isOverlayPassthrough = $0 }
-            ))
-
-            Picker(HearthChrome.L("浮窗透明度", "Overlay opacity"), selection: Binding(
-                get: { store.overlayOpacityLevel },
-                set: { store.overlayOpacityLevel = $0 }
-            )) {
-                Text(HearthChrome.L("低", "Low")).tag(0)
-                Text(HearthChrome.L("中", "Medium")).tag(1)
-                Text(HearthChrome.L("高", "High")).tag(2)
-            }
-            .pickerStyle(.segmented)
+            .font(.caption2)
+            .foregroundStyle(Color.mist)
+            .padding(.horizontal, 8)
         }
-        .toggleStyle(.switch)
-        .font(.caption)
-        .foregroundStyle(Color.hearthText.opacity(0.92))
-        .padding(14)
+        .padding(12)
         .background(Color.inkDeep.opacity(0.42))
         .overlay(alignment: .top) {
             Rectangle().fill(Color.line).frame(height: 1)
         }
     }
 
+    private var importBlock: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                TextField(HearthChrome.L("粘贴卡组代码", "Paste a deck code"), text: $importDraft)
+                    .textFieldStyle(.roundedBorder)
+                Button(HearthChrome.L("导入", "Import")) {
+                    guard store.deckMarks.importCode(importDraft, catalog: store.cardData.catalog) else { return }
+                    importDraft = ""
+                    selectedImportID = store.deckMarks.imported.last?.id
+                    showsCollection = false
+                    showsSettings = false
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            Button(HearthChrome.L("导出列表", "Export list")) {
+                store.copyExportedDecks()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(Color.gold)
+            ForEach(store.deckMarks.imported) { deck in
+                Button {
+                    selectedImportID = deck.id
+                    showsCollection = false
+                    showsSettings = false
+                } label: {
+                    HStack {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.caption2)
+                            .foregroundStyle(Color.gold)
+                        Text(deck.name)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.hearthText)
+                            .lineLimit(1)
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+    }
+
+    private func importedDetail(_ deck: ImportedDeck) -> some View {
+        let cards = store.deckMarks.resolvedCards(deck, catalog: store.cardData.catalog)
+        return VStack(alignment: .leading, spacing: 16) {
+            Text(deck.name)
+                .font(.system(size: 27, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.hearthText)
+            Text(HearthChrome.L(
+                "这是本地导入的卡组代码，只供查看和复制，不计入胜率，也不参与对局牌库还原。",
+                "This deck code is stored locally for viewing and copying. It is not part of your win rate or in-match deck tracking."
+            ))
+            .font(.caption)
+            .foregroundStyle(Color.mist)
+            HStack {
+                goldButton(HearthChrome.L("复制卡组代码", "Copy deck code"), systemImage: "doc.on.doc") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(deck.code, forType: .string)
+                }
+                Button(HearthChrome.L("删除", "Delete")) {
+                    store.deckMarks.removeImported(deck.id)
+                    selectedImportID = nil
+                }
+                .buttonStyle(.bordered)
+            }
+            if cards.isEmpty {
+                Text(HearthChrome.L("卡牌数据未就绪，或这段代码解不出来。", "Card data isn't ready, or this code could not be read."))
+                    .font(.caption)
+                    .foregroundStyle(Color.mist)
+            } else {
+                ForEach(cards, id: \.cardID) { card in
+                    deckCardRow(cardID: card.cardID, count: card.count, hoveredCardID: $hoveredCardID)
+                }
+            }
+            Spacer()
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
     // MARK: - Detail
 
     private var detailArea: some View {
         Group {
-            if showsCollection {
+            if showsSettings {
+            HelperSettingsPane(store: store)
+                .transition(.opacity.combined(with: .offset(y: 12)))
+        } else if showsCollection {
                 CollectionBrowser(store: store, isStandard: isStandardFormat)
                     .transition(.opacity.combined(with: .offset(y: 12)))
+            } else if let imported = store.deckMarks.imported.first(where: { $0.id == selectedImportID }) {
+                importedDetail(imported)
+                    .id(imported.id)
+                    .transition(.opacity.combined(with: .offset(x: 22)))
             } else if let deck = store.deckLibrary.decks.first(where: { $0.id == selectedDeckID }) {
                 deckDetail(deck)
                     .id(deck.id)
@@ -609,8 +703,24 @@ struct DashboardView: View {
                         .disabled(deck.code.isEmpty)
                         .opacity(deck.code.isEmpty ? 0.4 : 1)
                     }
+                    TextField(HearthChrome.L("标签，用逗号分开", "Tags, separated by commas"), text: Binding(
+                        get: { store.deckMarks.tag(for: deck.id) },
+                        set: { store.deckMarks.setTag(deck.id, $0) }
+                    ))
+                    .textFieldStyle(.roundedBorder)
 
                     statsHeader(overall)
+
+                    rateBreakdown(
+                        HearthChrome.L("赛制", "Format"),
+                        rows: store.history.grouped(deckID: deck.id) { $0.format ?? HearthChrome.L("未记录", "Unlisted") }
+                    )
+                    rateBreakdown(
+                        HearthChrome.L("我的职业（全部记录）", "Your class (all games)"),
+                        rows: store.history.grouped(deckID: nil) { entry in
+                            store.deckLibrary.decks.first { $0.id == entry.deckID }?.className ?? HearthChrome.L("未知", "Unknown")
+                        }
+                    )
 
                     classBreakdown(deck)
 
@@ -689,7 +799,7 @@ struct DashboardView: View {
                     style: StrokeStyle(lineWidth: 7, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
-                .animation(.easeInOut(duration: 0.4), value: rate)
+                .animation(HearthChrome.Motion.optional(.easeInOut(duration: 0.4)), value: rate)
                 .shadow(color: Color.mint.opacity(0.35), radius: 4)
             VStack(spacing: 0) {
                 Text(stats.games > 0 ? "\(Int(rate * 100))%" : "—")
@@ -794,6 +904,37 @@ struct DashboardView: View {
             .foregroundStyle(rate >= 0.5 ? Color.mint : Color.gold)
     }
 
+    private func rateBreakdown(_ title: String, rows: [(String, MatchHistoryStore.DeckStats)]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle(title)
+            if rows.isEmpty {
+                Text(HearthChrome.L("暂无对局数据", "No games yet"))
+                    .font(.caption)
+                    .foregroundStyle(Color.mist)
+            } else {
+                ForEach(rows, id: \.0) { row in
+                    HStack {
+                        Text(HearthChrome.phrase(row.0))
+                            .font(.subheadline)
+                            .foregroundStyle(Color.hearthText)
+                        Spacer()
+                        Text(HearthChrome.L(
+                            "\(row.1.wins)胜 \(row.1.losses)负 \(row.1.ties)平",
+                            "\(row.1.wins)W \(row.1.losses)L \(row.1.ties)T"
+                        ))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(Color.mist)
+                        Text(row.1.games > 0 ? "\(Int(row.1.winRate * 100))%" : "—")
+                            .font(.caption.monospacedDigit().weight(.bold))
+                            .foregroundStyle(row.1.winRate >= 0.5 ? Color.mint : Color.gold)
+                            .frame(width: 44, alignment: .trailing)
+                    }
+                }
+            }
+        }
+        .modifier(PanelSurface())
+    }
+
     private func classBreakdown(_ deck: DeckLibraryStore.DeckSummary) -> some View {
         let classNames = orderedClasses(deck)
 
@@ -871,16 +1012,28 @@ struct DashboardView: View {
     }
 
     private func recentMatches(_ deck: DeckLibraryStore.DeckSummary) -> some View {
-        let matches = store.history.recentMatches(deckID: deck.id)
+        let matches = filteredHistory(deckID: deck.id)
 
         return VStack(alignment: .leading, spacing: 12) {
             sectionTitle(HearthChrome.L("最近对局", "Recent games"))
+            HStack(spacing: 8) {
+                TextField(HearthChrome.L("搜索对手、卡组或备注", "Search class, deck, or note"), text: $historyQuery)
+                    .textFieldStyle(.roundedBorder)
+                Picker(HearthChrome.L("结果", "Result"), selection: $historyOutcome) {
+                    Text(HearthChrome.L("全部", "All")).tag(0)
+                    Text(HearthChrome.L("胜", "W")).tag(1)
+                    Text(HearthChrome.L("负", "L")).tag(2)
+                    Text(HearthChrome.L("平", "T")).tag(3)
+                }
+                .pickerStyle(.menu)
+                .frame(width: 110)
+            }
             if matches.isEmpty {
-                Text(HearthChrome.L("还没有已完成的对局", "No finished games yet"))
+                Text(HearthChrome.L("还没有符合条件的对局", "No matching games"))
                     .font(.caption)
                     .foregroundStyle(Color.mist)
             } else {
-                ForEach(matches) { entry in
+                ForEach(Array(matches.prefix(40))) { entry in
                     matchRow(entry)
                 }
             }
@@ -888,12 +1041,31 @@ struct DashboardView: View {
         .modifier(PanelSurface())
     }
 
+    private func filteredHistory(deckID: Int) -> [MatchHistoryEntry] {
+        let query = historyQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return store.history.entries
+            .filter { entry in
+                guard entry.deckID == deckID else { return false }
+                switch historyOutcome {
+                case 1 where entry.result != .win: return false
+                case 2 where entry.result != .loss: return false
+                case 3 where entry.result != .tie: return false
+                default: break
+                }
+                guard !query.isEmpty else { return true }
+                let note = store.history.note(for: entry.id)
+                let haystack = [entry.opponentClass, entry.deckName, entry.format ?? "", note].joined(separator: " ")
+                return haystack.localizedStandardContains(query)
+            }
+            .sorted { $0.startedAt > $1.startedAt }
+    }
+
     private func matchRow(_ entry: MatchHistoryEntry) -> some View {
         let expanded = expandedMatchID == entry.id
 
         return VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
+                HearthChrome.Motion.run {
                     expandedMatchID = expanded ? nil : entry.id
                 }
             } label: {
@@ -949,6 +1121,12 @@ struct DashboardView: View {
             .buttonStyle(.plain)
 
             if expanded {
+                TextField(HearthChrome.L("备注", "Note"), text: Binding(
+                    get: { store.history.note(for: entry.id) },
+                    set: { store.history.setNote(entry.id, $0) }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .padding(.bottom, 6)
                 matchDetail(entry)
                     .padding(.bottom, 10)
             }
@@ -1197,7 +1375,7 @@ struct DashboardView: View {
                 Spacer()
                 if filters.isActive {
                     Button(HearthChrome.L("重置筛选", "Reset")) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 1.0)) {
+                        HearthChrome.Motion.run {
                             filters = DeckCardFilters()
                         }
                     }
@@ -1338,7 +1516,7 @@ struct DashboardView: View {
                         tint: tint,
                         isOn: selection.wrappedValue.contains(value.0)
                     ) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 1.0)) {
+                        HearthChrome.Motion.run {
                             if selection.wrappedValue.contains(value.0) {
                                 selection.wrappedValue.remove(value.0)
                             } else {
@@ -1383,7 +1561,7 @@ struct DashboardView: View {
                         lineWidth: 1
                     )
                 )
-                .scaleEffect(isOn ? 1.05 : (hovering ? 1.03 : 1))
+                .scaleEffect(isOn ? HearthChrome.Motion.chipScaleOn : (hovering ? HearthChrome.Motion.chipScaleHover : 1))
             }
             .buttonStyle(.plain)
             .onHover { hovering = $0 }
@@ -1531,7 +1709,7 @@ struct DashboardView: View {
                 ForEach(Array(curve.enumerated()), id: \.offset) { index, count in
                     let isSelected = selection.contains(index)
                     Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 1.0)) {
+                        HearthChrome.Motion.run {
                             if isSelected {
                                 selection.remove(index)
                             } else {
@@ -1555,7 +1733,7 @@ struct DashboardView: View {
                                     )
                                 )
                                 .frame(height: max(CGFloat(count) / CGFloat(peak) * 44, count > 0 ? 4 : 1))
-                                .animation(.spring(response: 0.35, dampingFraction: 0.82), value: count)
+                                .animation(HearthChrome.Motion.optional(.spring(response: 0.35, dampingFraction: 0.82)), value: count)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 3)
                                         .strokeBorder(Color.white.opacity(isSelected ? 0.9 : 0), lineWidth: 1)

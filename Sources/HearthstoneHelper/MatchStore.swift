@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import HearthstoneCore
@@ -32,6 +33,9 @@ final class MatchStore {
     private static let opacityKey = "overlay-opacity-level"
     private static let themeKey = "appearance-theme"
     private static let languageKey = "ui-language"
+    private static let motionKey = "motion-level"
+    private static let overlayThemeKey = "overlay-theme"
+    private static let overlayLayoutKey = "overlay-layout"
 
     var overlayOpacityLevel: Int {
         didSet {
@@ -58,7 +62,41 @@ final class MatchStore {
         }
     }
 
-    var chromeRevision: Int { appearanceChoice &* 10 &+ interfaceLanguage }
+    var chromeRevision: Int {
+        appearanceChoice &* 10
+            &+ interfaceLanguage
+            &+ motionLevel &* 100
+            &+ overlayTheme &* 1_000
+            &+ overlayLayout &* 10_000
+    }
+
+    /// 0 off, 1 light, 2 flashy.
+    var motionLevel: Int {
+        didSet {
+            guard oldValue != motionLevel else { return }
+            UserDefaults.standard.set(motionLevel, forKey: Self.motionKey)
+            HearthChrome.motion = MotionLevel(rawValue: motionLevel) ?? .light
+        }
+    }
+
+    /// 0 follow app, 1 light, 2 dark.
+    var overlayTheme: Int {
+        didSet {
+            guard oldValue != overlayTheme else { return }
+            UserDefaults.standard.set(overlayTheme, forKey: Self.overlayThemeKey)
+        }
+    }
+
+    var overlayLayout: Int {
+        didSet {
+            guard oldValue != overlayLayout else { return }
+            UserDefaults.standard.set(overlayLayout, forKey: Self.overlayLayoutKey)
+            syncLayoutVisibility()
+            OverlayWindowManager.shared.applyLayoutPreset(overlayLayout)
+        }
+    }
+
+    let deckMarks = DeckMarks()
 
     /// Background tint for the overlay panels, by user-selected transparency level.
     var overlayBackgroundOpacity: Double {
@@ -133,10 +171,16 @@ final class MatchStore {
         let languageRaw = UserDefaults.standard.object(forKey: Self.languageKey) as? Int ?? InterfaceLanguage.chinese.rawValue
         appearanceChoice = themeRaw
         interfaceLanguage = languageRaw
+        motionLevel = UserDefaults.standard.object(forKey: Self.motionKey) as? Int ?? MotionLevel.light.rawValue
+        overlayTheme = UserDefaults.standard.object(forKey: Self.overlayThemeKey) as? Int ?? OverlayThemeChoice.followApp.rawValue
+        overlayLayout = UserDefaults.standard.object(forKey: Self.overlayLayoutKey) as? Int ?? OverlayLayoutPreset.standard.rawValue
         overlayOpacityLevel = UserDefaults.standard.object(forKey: Self.opacityKey) as? Int ?? 1
         let choice = AppearanceChoice(rawValue: themeRaw) ?? .dark
+        HearthChrome.pendingChoice = choice
         HearthChrome.language = InterfaceLanguage(rawValue: languageRaw) ?? .chinese
-        HearthChrome.applyAppAppearance(choice)
+        HearthChrome.motion = MotionLevel(rawValue: motionLevel) ?? .light
+        HearthChrome.isLight = choice == .light
+        syncLayoutVisibility()
 
         monitor.deckListResolver = { [weak self] code in
             guard let self else { return [] }
@@ -255,5 +299,93 @@ final class MatchStore {
 
     func toggleOpponentPanel() {
         isOpponentPanelVisible.toggle()
+    }
+
+    func toggleOverlays() {
+        let show = !(isOpponentOverlayVisible || isPlayerOverlayVisible)
+        isOpponentOverlayVisible = show
+        isPlayerOverlayVisible = show
+    }
+
+    func toggleLanguage() {
+        interfaceLanguage = interfaceLanguage == InterfaceLanguage.english.rawValue
+            ? InterfaceLanguage.chinese.rawValue
+            : InterfaceLanguage.english.rawValue
+    }
+
+    func copyMatchSnapshot() {
+        let record = match
+        let friendly = record.friendlyStats
+        let opponent = record.opponentStats
+        let lines = [
+            HearthChrome.L("对手", "Opponent") + ": " + HearthChrome.phrase(record.opponentClass),
+            HearthChrome.L("卡组", "Deck") + ": " + record.playerDeckName,
+            HearthChrome.L(
+                "己方 手\(friendly?.handCount ?? 0) 库\(friendly?.deckCount ?? 0) 血\(friendly?.currentHealth ?? 0)",
+                "You hand \(friendly?.handCount ?? 0) deck \(friendly?.deckCount ?? 0) hp \(friendly?.currentHealth ?? 0)"
+            ),
+            HearthChrome.L(
+                "对手 手\(opponent?.handCount ?? 0) 库\(opponent?.deckCount ?? 0) 血\(opponent?.currentHealth ?? 0)",
+                "Opponent hand \(opponent?.handCount ?? 0) deck \(opponent?.deckCount ?? 0) hp \(opponent?.currentHealth ?? 0)"
+            ),
+            HearthChrome.L("己方手牌", "Your hand") + ": " + record.playerHandCards.map(\.name).joined(separator: ", "),
+            HearthChrome.L("对手已见", "Opponent seen") + ": " + record.opponentCards.map(\.name).joined(separator: ", ")
+        ]
+        let text = lines.joined(separator: "\n")
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    func interfaceContext(systemIsLight: Bool, overlay: Bool) -> HearthContext {
+        let app = AppearanceChoice(rawValue: appearanceChoice) ?? .dark
+        let choice: AppearanceChoice
+        if overlay {
+            switch OverlayThemeChoice(rawValue: overlayTheme) ?? .followApp {
+            case .followApp: choice = app
+            case .light: choice = .light
+            case .dark: choice = .dark
+            }
+        } else {
+            choice = app
+        }
+        return HearthChrome.context(
+            choice: choice,
+            systemIsLight: systemIsLight,
+            language: InterfaceLanguage(rawValue: interfaceLanguage) ?? .chinese,
+            motion: MotionLevel(rawValue: motionLevel) ?? .light
+        )
+    }
+
+    func exportDeckList() -> String {
+        var lines: [String] = []
+        for deck in deckLibrary.decks where !deck.code.isEmpty {
+            lines.append("\(deck.name)\t\(deck.code)")
+        }
+        for deck in deckMarks.imported {
+            lines.append("\(deck.name)\t\(deck.code)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    func copyExportedDecks() {
+        let text = exportDeckList()
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private func syncLayoutVisibility() {
+        switch OverlayLayoutPreset(rawValue: overlayLayout) ?? .standard {
+        case .deckOnly:
+            isPlayerOverlayVisible = true
+            isOpponentOverlayVisible = false
+        case .opponentOnly:
+            isPlayerOverlayVisible = false
+            isOpponentOverlayVisible = true
+        case .standard, .swapped, .narrow, .wide:
+            isPlayerOverlayVisible = true
+            isOpponentOverlayVisible = true
+        }
     }
 }

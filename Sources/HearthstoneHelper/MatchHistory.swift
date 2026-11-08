@@ -42,6 +42,7 @@ final class MatchHistoryStore {
 
     init() {
         load()
+        loadNotes()
     }
 
     func appendIfNeeded(
@@ -164,7 +165,44 @@ final class MatchHistoryStore {
         return result
     }
 
+    func note(for id: UUID) -> String {
+        notes[id.uuidString] ?? ""
+    }
+
+    func setNote(_ id: UUID, _ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            notes.removeValue(forKey: id.uuidString)
+        } else {
+            notes[id.uuidString] = trimmed
+        }
+        saveNotes()
+    }
+
+    /// Same win-rate rule as `stats`: complete, non-tie games only count toward the percentage.
+    func grouped(deckID: Int?, label: (MatchHistoryEntry) -> String) -> [(String, DeckStats)] {
+        var order: [String] = []
+        var seen: Set<String> = []
+        for entry in entries where deckID == nil || entry.deckID == deckID {
+            let key = label(entry)
+            if seen.insert(key).inserted { order.append(key) }
+        }
+        return order.map { key in
+            (key, stats { (deckID == nil || $0.deckID == deckID) && label($0) == key })
+        }
+        .sorted { lhs, rhs in
+            if lhs.1.games != rhs.1.games { return lhs.1.games > rhs.1.games }
+            return lhs.0 < rhs.0
+        }
+    }
+
     // MARK: - Persistence
+
+    private var notes: [String: String] = [:]
+
+    private static var notesURL: URL {
+        storageURL.deletingLastPathComponent().appendingPathComponent("notes.json")
+    }
 
     private func load() {
         guard
@@ -181,6 +219,24 @@ final class MatchHistoryStore {
         )
         if let data = try? JSONEncoder().encode(entries) {
             try? data.write(to: Self.storageURL, options: .atomic)
+        }
+    }
+
+    private func loadNotes() {
+        guard
+            let data = try? Data(contentsOf: Self.notesURL),
+            let decoded = try? JSONDecoder().decode([String: String].self, from: data)
+        else { return }
+        notes = decoded
+    }
+
+    private func saveNotes() {
+        try? FileManager.default.createDirectory(
+            at: Self.notesURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        if let data = try? JSONEncoder().encode(notes) {
+            try? data.write(to: Self.notesURL, options: .atomic)
         }
     }
 }

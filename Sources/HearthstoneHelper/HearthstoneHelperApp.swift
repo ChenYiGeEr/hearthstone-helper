@@ -16,6 +16,24 @@ struct HearthstoneHelperApp: App {
         }
         .defaultSize(width: 1_180, height: 760)
         .windowResizability(.contentMinSize)
+        .commands {
+            CommandMenu(store.interfaceLanguage == InterfaceLanguage.english.rawValue ? "Helper" : "助手") {
+                Button(HearthChrome.L("显示或隐藏浮窗", "Toggle overlays")) {
+                    store.toggleOverlays()
+                }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+
+                Button(HearthChrome.L("切换语言", "Switch language")) {
+                    store.toggleLanguage()
+                }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+
+                Button(HearthChrome.L("复制当前对局", "Copy match snapshot")) {
+                    store.copyMatchSnapshot()
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+            }
+        }
 
         MenuBarExtra(store.interfaceLanguage == InterfaceLanguage.english.rawValue ? "Hearthstone" : "炉石助手", systemImage: "shield.lefthalf.filled") {
             MenuBarContent(store: store)
@@ -29,6 +47,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // window closes; the menu bar item keeps the app alive.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        HearthChrome.applyAppAppearance(HearthChrome.pendingChoice)
     }
 }
 

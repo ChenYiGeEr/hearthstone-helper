@@ -165,6 +165,21 @@ final class OverlayWindowManager {
         playerPanel?.ignoresMouseEvents = store.isOverlayPassthrough
     }
 
+    func applyLayoutPreset(_ raw: Int) {
+        let preset = OverlayLayoutPreset(rawValue: raw) ?? .standard
+        let width: CGFloat = preset == .narrow ? 248 : preset == .wide ? 420 : 300
+        let height: CGFloat = 540
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        let visible = screen.visibleFrame
+        let margin: CGFloat = 24
+        let y = visible.midY - height / 2
+        let left = NSRect(x: visible.minX + margin, y: y, width: width, height: height)
+        let right = NSRect(x: visible.maxX - width - margin, y: y, width: width, height: height)
+        let opponentOnLeft = preset != .swapped
+        opponentPanel?.setFrame(opponentOnLeft ? left : right, display: true)
+        playerPanel?.setFrame(opponentOnLeft ? right : left, display: true)
+    }
+
     private func setPanel(_ panel: NSPanel?, visible: Bool, id: PanelID) {
         guard let panel else { return }
         if visible, !panel.isVisible {

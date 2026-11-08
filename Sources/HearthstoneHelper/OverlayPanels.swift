@@ -29,11 +29,7 @@ struct OpponentOverlayPanel: View {
     @Environment(\.colorScheme) private var systemScheme
 
     private var chromeContext: HearthContext {
-        HearthChrome.context(
-            choice: AppearanceChoice(rawValue: store.appearanceChoice) ?? .dark,
-            systemIsLight: systemScheme == .light,
-            language: InterfaceLanguage(rawValue: store.interfaceLanguage) ?? .chinese
-        )
+        store.interfaceContext(systemIsLight: systemScheme == .light, overlay: true)
     }
 
     var body: some View {
@@ -127,11 +123,7 @@ struct PlayerOverlayPanel: View {
     @Environment(\.colorScheme) private var systemScheme
 
     private var chromeContext: HearthContext {
-        HearthChrome.context(
-            choice: AppearanceChoice(rawValue: store.appearanceChoice) ?? .dark,
-            systemIsLight: systemScheme == .light,
-            language: InterfaceLanguage(rawValue: store.interfaceLanguage) ?? .chinese
-        )
+        store.interfaceContext(systemIsLight: systemScheme == .light, overlay: true)
     }
 
     var body: some View {
@@ -508,7 +500,10 @@ private struct OverlayPanelShell<Content: View>: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.inkDeep.opacity(store.overlayBackgroundOpacity), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(
+            Color.inkDeep.opacity(HearthChrome.isLight ? min(store.overlayBackgroundOpacity + 0.28, 0.94) : store.overlayBackgroundOpacity),
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(alignment: .top) {
             LinearGradient(
@@ -658,7 +653,7 @@ private struct OverlaySection<Content: View>: View {
         let _ = HearthChrome.install(hearthContext)
         return VStack(alignment: .leading, spacing: 6) {
             Button {
-                withAnimation(.spring(response: 0.32, dampingFraction: 1.0)) {
+                HearthChrome.Motion.run {
                     isExpanded.toggle()
                 }
             } label: {

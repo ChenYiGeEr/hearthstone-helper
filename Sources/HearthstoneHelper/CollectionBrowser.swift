@@ -193,7 +193,7 @@ struct CollectionBrowser: View {
             }
             if isActiveFilter {
                 Button(HearthChrome.L("重置筛选", "Reset")) {
-                    withAnimation(.easeInOut(duration: 0.15)) {
+                    HearthChrome.Motion.run {
                         selectedClass = nil
                         types = []
                         rarities = []
@@ -288,7 +288,7 @@ struct CollectionBrowser: View {
     }
 
     private func selectClass(_ value: String?) {
-        withAnimation(.easeInOut(duration: 0.15)) {
+        HearthChrome.Motion.run {
             selectedClass = value
             page = 0
             recompute()
@@ -311,7 +311,7 @@ struct CollectionBrowser: View {
                         tint: tint,
                         isOn: selection.wrappedValue.contains(value.0)
                     ) {
-                        withAnimation(.easeInOut(duration: 0.15)) {
+                        HearthChrome.Motion.run {
                             if selection.wrappedValue.contains(value.0) {
                                 selection.wrappedValue.remove(value.0)
                             } else {
@@ -418,11 +418,12 @@ private struct CollectionGrid: View {
                     .shadow(color: .black.opacity(0.6), radius: 18, y: 6)
                     .padding(hoverIsOnRightSide ? .leading : .trailing, 24)
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                    .animation(.spring(response: 0.3, dampingFraction: 1.0), value: hoveredCardID)
+                    .animation(HearthChrome.Motion.optional(.spring(response: 0.3, dampingFraction: 1.0)), value: hoveredCardID)
                     .allowsHitTesting(false)
             }
         }
         .onAppear {
+            guard HearthChrome.motion == .flashy else { return }
             withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
                 loadingPulse = true
             }
@@ -514,7 +515,7 @@ struct FilterChipTinted: View {
                     lineWidth: 1
                 )
             )
-            .scaleEffect(isOn ? 1.05 : (hovering ? 1.03 : 1))
+            .scaleEffect(isOn ? HearthChrome.Motion.chipScaleOn : (hovering ? HearthChrome.Motion.chipScaleHover : 1))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }

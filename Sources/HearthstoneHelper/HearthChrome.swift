@@ -20,11 +20,33 @@ enum InterfaceLanguage: Int, CaseIterable, Sendable {
     case english = 1
 }
 
+enum MotionLevel: Int, CaseIterable, Sendable {
+    case off = 0
+    case light = 1
+    case flashy = 2
+}
+
+enum OverlayThemeChoice: Int, CaseIterable, Sendable {
+    case followApp = 0
+    case light = 1
+    case dark = 2
+}
+
+enum OverlayLayoutPreset: Int, CaseIterable, Sendable {
+    case standard = 0
+    case swapped = 1
+    case narrow = 2
+    case wide = 3
+    case deckOnly = 4
+    case opponentOnly = 5
+}
+
 struct HearthContext: Equatable {
     var isLight: Bool
     var language: InterfaceLanguage
+    var motion: MotionLevel
 
-    static let darkChinese = HearthContext(isLight: false, language: .chinese)
+    static let darkChinese = HearthContext(isLight: false, language: .chinese, motion: .light)
 }
 
 private struct HearthContextKey: EnvironmentKey {
@@ -43,26 +65,38 @@ extension EnvironmentValues {
 enum HearthChrome {
     nonisolated(unsafe) static var isLight = false
     nonisolated(unsafe) static var language: InterfaceLanguage = .chinese
+    nonisolated(unsafe) static var motion: MotionLevel = .light
+    /// Set during store init. Applied only after NSApp exists.
+    nonisolated(unsafe) static var pendingChoice: AppearanceChoice = .dark
 
     @discardableResult
     static func install(_ context: HearthContext) -> HearthContext {
         isLight = context.isLight
         language = context.language
+        motion = context.motion
         return context
     }
 
-    static func context(choice: AppearanceChoice, systemIsLight: Bool, language: InterfaceLanguage) -> HearthContext {
+    static func context(
+        choice: AppearanceChoice,
+        systemIsLight: Bool,
+        language: InterfaceLanguage,
+        motion: MotionLevel
+    ) -> HearthContext {
         let isLight: Bool
         switch choice {
         case .light: isLight = true
         case .dark: isLight = false
         case .system: isLight = systemIsLight
         }
-        return HearthContext(isLight: isLight, language: language)
+        return HearthContext(isLight: isLight, language: language, motion: motion)
     }
 
     @MainActor
     static func applyAppAppearance(_ choice: AppearanceChoice) {
+        // NSApp is nil while SwiftUI is still creating the App. Callers must
+        // wait until applicationDidFinishLaunching or a later user action.
+        guard NSApp != nil else { return }
         switch choice {
         case .light:
             NSApp.appearance = NSAppearance(named: .aqua)
@@ -76,6 +110,52 @@ enum HearthChrome {
         case .light: isLight = true
         case .dark: isLight = false
         case .system: isLight = systemLight
+        }
+    }
+
+    /// Shared gate for springs, pulses, and chip motion.
+    enum Motion {
+        static func run(_ body: () -> Void) {
+            switch HearthChrome.motion {
+            case .off:
+                body()
+            case .light:
+                withAnimation(.easeOut(duration: 0.16), body)
+            case .flashy:
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.82), body)
+            }
+        }
+
+        static var chipScaleOn: CGFloat {
+            switch HearthChrome.motion {
+            case .off: 1
+            case .light: 1.02
+            case .flashy: 1.05
+            }
+        }
+
+        static var chipScaleHover: CGFloat {
+            switch HearthChrome.motion {
+            case .off: 1
+            case .light: 1.01
+            case .flashy: 1.03
+            }
+        }
+
+        static func optional(_ animation: Animation) -> Animation? {
+            switch HearthChrome.motion {
+            case .off: nil
+            case .light: animation.speed(1.4)
+            case .flashy: animation
+            }
+        }
+
+        static var pulseScale: CGFloat {
+            switch HearthChrome.motion {
+            case .off: 1
+            case .light: 1.15
+            case .flashy: 1.45
+            }
         }
     }
 
@@ -211,11 +291,17 @@ struct SoftAppear: ViewModifier {
     @State private var shown = false
 
     func body(content: Content) -> some View {
+        let motion = HearthChrome.motion
         content
-            .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 10)
+            .opacity(motion == .off || shown ? 1 : 0)
+            .offset(y: motion == .off ? 0 : (shown ? 0 : (motion == .flashy ? 12 : 6)))
             .onAppear {
-                withAnimation(.spring(response: 0.46, dampingFraction: 0.84)) {
+                guard motion != .off else {
+                    shown = true
+                    return
+                }
+                let response = motion == .flashy ? 0.46 : 0.28
+                withAnimation(.spring(response: response, dampingFraction: 0.9)) {
                     shown = true
                 }
             }
@@ -235,16 +321,17 @@ struct LivePulse: View {
         Circle()
             .fill(tint)
             .frame(width: 6, height: 6)
-            .scaleEffect(active && pulsing ? 1.45 : 1)
-            .shadow(color: tint.opacity(active && pulsing ? 0.85 : 0.25), radius: active ? 5 : 0)
+            .scaleEffect(active && pulsing ? HearthChrome.Motion.pulseScale : 1)
+            .shadow(color: tint.opacity(active && pulsing ? 0.85 : 0.25), radius: active && HearthChrome.motion != .off ? 5 : 0)
             .onAppear { restart() }
             .onChange(of: active) { _, _ in restart() }
     }
 
     private func restart() {
         pulsing = false
-        guard active else { return }
-        withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
+        guard active, HearthChrome.motion != .off else { return }
+        let duration = HearthChrome.motion == .flashy ? 0.85 : 1.2
+        withAnimation(.easeInOut(duration: duration).repeatForever(autoreverses: true)) {
             pulsing = true
         }
     }

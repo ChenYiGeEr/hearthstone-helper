@@ -37,6 +37,7 @@ final class MirrorLiveStore {
     }
     private(set) var opponent: OpponentInfo?
     private(set) var localLeagueID: Int?
+    private(set) var localStars: Int?
     private(set) var gameType: Int?
     private(set) var formatType: Int?
 
@@ -111,6 +112,8 @@ final class MirrorLiveStore {
                 stars: match.opposingPlayer.standardMedalInfo.stars.intValue
             )
             localLeagueID = match.localPlayer.standardMedalInfo.leagueId.intValue
+            localStars = match.localPlayer.standardMedalInfo.stars.intValue
+            RankLog.record(leagueID: localLeagueID, stars: localStars)
             gameType = match.gameType.intValue
             formatType = match.formatType.intValue
         } else {

@@ -4,7 +4,7 @@
 
 本机 macOS 14 的炉石助手。主窗口看卡组、胜率和历史；对局进行时，左边浮窗是对手记录，右边是己方牌库。数据来自本机客户端日志，以及对进程 `unity.Blizzard Entertainment.Hearthstone` 的只读内存。不代替玩家操作，不向游戏注入输入。
 
-网络只访问 hearthstonejson 的 zhCN 卡牌 JSON 和卡图。本地记录不上传。卡牌 JSON 目前只读 `Application Support` 里的缓存，`CardDataStore.download()` 没有调用方。
+网络访问 hearthstonejson 的 zhCN 卡牌 JSON 和卡图。设置里手动检查更新时，还会读取 GitHub Releases 的公开版本信息，不需要密钥。本地记录不上传。卡牌 JSON 目前只读 `Application Support` 里的缓存，`CardDataStore.download()` 没有调用方。
 
 浮窗默认接收鼠标，穿透是开关，默认关。主窗口关掉不退出，菜单栏把进程留住。
 

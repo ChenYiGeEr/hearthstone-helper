@@ -75,6 +75,12 @@ struct OpponentOverlayPanel: View {
                 rematchNote(previousEncounter)
             }
 
+            OpponentInferenceView(
+                cards: match.opponentCards,
+                deckCount: mergedOpponentStats?.deckCount,
+                catalog: store.cardData.catalog
+            )
+
             OverlayScrollView {
                 if let previousEncounter {
                     previousSeenSection(previousEncounter)
@@ -158,6 +164,19 @@ struct PlayerOverlayPanel: View {
             )
 
             winrateLine(match)
+
+            if store.mulliganAdviceEnabled,
+               let mulligan = store.live.mulligan,
+               !mulligan.done,
+               !mulligan.cardIDs.isEmpty {
+                MulliganAdviceView(hints: MulliganAdvice.hints(cardIDs: mulligan.cardIDs, catalog: store.cardData.catalog))
+            }
+
+            if let deckID = match.playerDeckID,
+               let deck = store.deckLibrary.decks.first(where: { $0.id == deckID }),
+               !deck.curve.isEmpty || !match.turns.isEmpty {
+                PaceCompareView(curve: deck.curve, turns: match.turns)
+            }
 
             OverlayScrollView {
                 zoneGroup(

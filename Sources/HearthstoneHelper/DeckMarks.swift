@@ -162,6 +162,21 @@ struct HelperSettingsPane: View {
                     .foregroundStyle(Color.mist)
                 }
 
+                section(HearthChrome.L("起手、更新与诊断", "Mulligan, updates, diagnostics")) {
+                    Toggle(HearthChrome.L("起手留牌建议（只按费用）", "Opening hand advice (cost only)"), isOn: Binding(
+                        get: { store.mulliganAdviceEnabled },
+                        set: { store.mulliganAdviceEnabled = $0 }
+                    ))
+                    Text(HearthChrome.L(
+                        "默认关闭。打开后，换牌阶段在右侧浮窗提示留或换。",
+                        "Off by default. When on, the right overlay suggests keep or toss during the mulligan."
+                    ))
+                    .font(.caption2)
+                    .foregroundStyle(Color.mist)
+                    UpdateNotesSection()
+                    DiagnosticsSection(store: store)
+                }
+
                 section(HearthChrome.L("快捷键", "Shortcuts")) {
                     Text(HearthChrome.L(
                         "助手在前台时生效，不需要额外权限。",

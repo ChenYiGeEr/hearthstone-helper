@@ -620,7 +620,10 @@ struct DashboardView: View {
             HelperSettingsPane(store: store)
                 .transition(.opacity.combined(with: .offset(y: 12)))
         } else if showsCollection {
-                CollectionBrowser(store: store, isStandard: isStandardFormat)
+                VStack(spacing: 0) {
+                    RankTrajectoryCard(store: store)
+                    CollectionBrowser(store: store, isStandard: isStandardFormat)
+                }
                     .transition(.opacity.combined(with: .offset(y: 12)))
             } else if let imported = store.deckMarks.imported.first(where: { $0.id == selectedImportID }) {
                 importedDetail(imported)
@@ -1182,6 +1185,12 @@ struct DashboardView: View {
                     .font(.caption)
                     .foregroundStyle(Color.mist)
             }
+
+            OpponentInferenceView(
+                cards: entry.opponentCards ?? [],
+                deckCount: nil,
+                catalog: store.cardData.catalog
+            )
 
             turnTimeline(entry)
             opponentDeckExport(entry)

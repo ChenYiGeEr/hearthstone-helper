@@ -36,6 +36,7 @@ final class MatchStore {
     private static let motionKey = "motion-level"
     private static let overlayThemeKey = "overlay-theme"
     private static let overlayLayoutKey = "overlay-layout"
+    private static let mulliganKey = "mulligan-advice"
 
     var overlayOpacityLevel: Int {
         didSet {
@@ -92,8 +93,16 @@ final class MatchStore {
             guard oldValue != overlayLayout else { return }
             UserDefaults.standard.set(overlayLayout, forKey: Self.overlayLayoutKey)
             syncLayoutVisibility()
-            OverlayWindowManager.shared.applyLayoutPreset(overlayLayout)
+        OverlayWindowManager.shared.applyLayoutPreset(overlayLayout)
+    }
+
+    /// Optional opening-hand hints. Off by default.
+    var mulliganAdviceEnabled: Bool {
+        didSet {
+            guard oldValue != mulliganAdviceEnabled else { return }
+            UserDefaults.standard.set(mulliganAdviceEnabled, forKey: Self.mulliganKey)
         }
+    }
     }
 
     let deckMarks = DeckMarks()
@@ -174,6 +183,7 @@ final class MatchStore {
         motionLevel = UserDefaults.standard.object(forKey: Self.motionKey) as? Int ?? MotionLevel.light.rawValue
         overlayTheme = UserDefaults.standard.object(forKey: Self.overlayThemeKey) as? Int ?? OverlayThemeChoice.followApp.rawValue
         overlayLayout = UserDefaults.standard.object(forKey: Self.overlayLayoutKey) as? Int ?? OverlayLayoutPreset.standard.rawValue
+        mulliganAdviceEnabled = UserDefaults.standard.bool(forKey: Self.mulliganKey)
         overlayOpacityLevel = UserDefaults.standard.object(forKey: Self.opacityKey) as? Int ?? 1
         let choice = AppearanceChoice(rawValue: themeRaw) ?? .dark
         HearthChrome.pendingChoice = choice

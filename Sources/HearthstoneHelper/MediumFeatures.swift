@@ -549,6 +549,7 @@ struct UpdateNotesSection: View {
 
 @MainActor
 enum DiagnosticsReport {
+    @MainActor
     static func text(store: MatchStore) -> String {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("HearthstoneHelper")

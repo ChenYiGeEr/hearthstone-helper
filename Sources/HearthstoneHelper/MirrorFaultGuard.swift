@@ -10,7 +10,7 @@ enum MirrorFaultGuard {
         init(_ run: @escaping () -> Void) { self.run = run }
     }
 
-    static func protect<T>(_ body: () -> T) -> T? {
+    static func protect<T>(_ body: @escaping () -> T) -> T? {
         let box = Box {}
         var value: T?
         box.run = { value = body() }

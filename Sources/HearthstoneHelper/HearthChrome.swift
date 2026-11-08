@@ -290,9 +290,11 @@ struct SoftAppear: ViewModifier {
 
     func body(content: Content) -> some View {
         let motion = HearthChrome.motion
+        // Opacity stays 1 always. Animating parent opacity leaves later
+        // ForEach inserts at opacity 0; lists that disableAnimations (the
+        // opponent overlay) never recover, so the left panel looks frozen.
         content
-            .opacity(motion == .off || shown ? 1 : 0)
-            .offset(y: motion == .off ? 0 : (shown ? 0 : (motion == .flashy ? 12 : 6)))
+            .offset(y: motion == .off || shown ? 0 : (motion == .flashy ? 12 : 6))
             .onAppear {
                 guard motion != .off else {
                     shown = true

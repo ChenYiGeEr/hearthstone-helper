@@ -76,53 +76,58 @@ struct OpponentOverlayPanel: View {
             }
 
             OverlayScrollView {
-                if let previousEncounter {
-                    previousSeenSection(previousEncounter)
+                Group {
+                    if let previousEncounter {
+                        previousSeenSection(previousEncounter)
+                    }
+                    secretsBlock(match)
+                    zoneGroup(
+                        HearthChrome.L("牌库", "Deck"),
+                        tint: .goldSoft,
+                        total: mergedOpponentStats?.deckCount,
+                        cards: match.opponentCards.filter { $0.currentZone == "DECK" },
+                        store: store,
+                        hoveredCardID: $hoveredCardID,
+                        showsCount: false,
+                        animated: false
+                    )
+                    OpponentInferenceView(
+                        cards: match.opponentCards,
+                        deckCount: mergedOpponentStats?.deckCount,
+                        catalog: store.cardData.catalog,
+                        extraOnly: true
+                    )
+                    zoneGroup(
+                        HearthChrome.L("手牌", "Hand"),
+                        tint: .mintSoft,
+                        total: mergedOpponentStats?.handCount,
+                        cards: match.opponentCards.filter { $0.currentZone == "HAND" },
+                        store: store,
+                        hoveredCardID: $hoveredCardID,
+                        showsCount: false,
+                        animated: false
+                    )
+                    zoneGroup(
+                        HearthChrome.L("其他", "Other"),
+                        tint: .mistSoft,
+                        total: nil,
+                        cards: match.opponentCards.filter { card in
+                            card.currentZone != "DECK" && card.currentZone != "HAND"
+                        },
+                        store: store,
+                        hoveredCardID: $hoveredCardID,
+                        hideWhenEmpty: true,
+                        animated: false
+                    )
                 }
-                secretsBlock(match)
-                zoneGroup(
-                    HearthChrome.L("牌库", "Deck"),
-                    tint: .goldSoft,
-                    total: mergedOpponentStats?.deckCount,
-                    cards: match.opponentCards.filter { $0.currentZone == "DECK" },
-                    store: store,
-                    hoveredCardID: $hoveredCardID,
-                    showsCount: false,
-                    animated: HearthChrome.motion != .off
-                )
-                OpponentInferenceView(
-                    cards: match.opponentCards,
-                    deckCount: mergedOpponentStats?.deckCount,
-                    catalog: store.cardData.catalog,
-                    extraOnly: true
-                )
-                zoneGroup(
-                    HearthChrome.L("手牌", "Hand"),
-                    tint: .mintSoft,
-                    total: mergedOpponentStats?.handCount,
-                    cards: match.opponentCards.filter { $0.currentZone == "HAND" },
-                    store: store,
-                    hoveredCardID: $hoveredCardID,
-                    showsCount: false,
-                    animated: HearthChrome.motion != .off
-                )
-                zoneGroup(
-                    HearthChrome.L("其他", "Other"),
-                    tint: .mistSoft,
-                    total: nil,
-                    cards: match.opponentCards.filter { card in
-                        card.currentZone != "DECK" && card.currentZone != "HAND"
-                    },
-                    store: store,
-                    hoveredCardID: $hoveredCardID,
-                    hideWhenEmpty: true,
-                    animated: HearthChrome.motion != .off
-                )
+                // Force a clean rebind when reveals change. SoftAppear opacity
+                // used to leave inserts invisible; this keeps the list honest
+                // even if a parent animation leaks back in later.
+                .id(opponentListStamp(match.opponentCards))
             }
         }
         .environment(\.hearthContext, context)
         .preferredColorScheme(context.isLight ? .light : .dark)
-        .softAppear()
     }
 }
 
@@ -227,7 +232,6 @@ struct PlayerOverlayPanel: View {
         }
         .environment(\.hearthContext, context)
         .preferredColorScheme(context.isLight ? .light : .dark)
-        .softAppear()
     }
 
     /// "对阵 恶魔猎手 66.7% 2/1" from the local history of this exact deck.
@@ -689,6 +693,14 @@ private struct DeckLeaveRow: View {
                 }
             }
     }
+}
+
+
+@MainActor
+private func opponentListStamp(_ cards: [TrackedCard]) -> String {
+    cards.map { "\($0.overlayRowID):\($0.copies):\($0.currentZone ?? "-")" }
+        .sorted()
+        .joined(separator: "|")
 }
 
 private extension TrackedCard {

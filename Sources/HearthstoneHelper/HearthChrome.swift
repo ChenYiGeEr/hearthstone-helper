@@ -285,6 +285,34 @@ extension Color {
     static var hoverWash: Color { light ? Color.black.opacity(0.05) : Color.white.opacity(0.055) }
 }
 
+/// Card-frame corners. Drawn on top of plates; they do not take hits.
+struct HearthCornerMarks: View {
+    var tint: Color = .gold
+    var arm: CGFloat = 14
+
+    var body: some View {
+        ZStack {
+            mark.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            mark.rotationEffect(.degrees(90))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            mark.rotationEffect(.degrees(180))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            mark.rotationEffect(.degrees(270))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var mark: some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle().fill(tint.opacity(0.9)).frame(width: arm, height: 1.5)
+            Rectangle().fill(tint.opacity(0.9)).frame(width: 1.5, height: arm)
+        }
+        .frame(width: arm, height: arm, alignment: .topLeading)
+        .padding(8)
+    }
+}
+
 struct SoftAppear: ViewModifier {
     @State private var shown = false
 
@@ -294,17 +322,12 @@ struct SoftAppear: ViewModifier {
         // ForEach inserts at opacity 0; lists that disableAnimations (the
         // opponent overlay) never recover, so the left panel looks frozen.
         content
-            .offset(y: motion == .off || shown ? 0 : (motion == .flashy ? 12 : 6))
-            .onAppear {
-                guard motion != .off else {
-                    shown = true
-                    return
-                }
-                let response = motion == .flashy ? 0.46 : 0.28
-                withAnimation(.spring(response: response, dampingFraction: 0.9)) {
-                    shown = true
-                }
-            }
+            .offset(y: motion == .off || shown ? 0 : (motion == .flashy ? 16 : 8))
+            .animation(
+                motion == .off ? nil : .spring(response: motion == .flashy ? 0.48 : 0.28, dampingFraction: 0.86),
+                value: shown
+            )
+            .onAppear { shown = true }
     }
 }
 

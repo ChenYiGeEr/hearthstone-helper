@@ -119,10 +119,18 @@ struct DashboardView: View {
             .animation(HearthChrome.motion == .off ? nil : .easeInOut(duration: HearthChrome.motion == .flashy ? 0.45 : 0.22), value: context.isLight)
 
             RadialGradient(
-                colors: [Color.gold.opacity(context.isLight ? 0.10 : 0.16), Color.gold.opacity(0.04), .clear],
-                center: UnitPoint(x: 0.12, y: 0),
-                startRadius: 12,
-                endRadius: 520
+                colors: [Color.gold.opacity(context.isLight ? 0.14 : 0.20), Color.gold.opacity(0.05), .clear],
+                center: UnitPoint(x: 0.08, y: 0),
+                startRadius: 8,
+                endRadius: 460
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            RadialGradient(
+                colors: [Color.inkBottom.opacity(context.isLight ? 0.35 : 0.55), .clear],
+                center: UnitPoint(x: 0.85, y: 1),
+                startRadius: 20,
+                endRadius: 480
             )
             .ignoresSafeArea()
             .allowsHitTesting(false)
@@ -180,9 +188,20 @@ struct DashboardView: View {
                     .frame(width: 28, height: 28)
                     .shadow(color: Color.gold.opacity(0.35), radius: 6, y: 2)
 
-                    Text(HearthChrome.L("炉石助手", "Hearthstone"))
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.hearthText)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(HearthChrome.L("炉石助手", "Hearthstone"))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.hearthText)
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.gold, Color.gold.opacity(0.15)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: 72, height: 2)
+                    }
                     Spacer(minLength: 0)
                 }
 
@@ -312,11 +331,20 @@ struct DashboardView: View {
         .frame(width: 280)
         .background(
             LinearGradient(
-                colors: [Color.inkLift.opacity(0.78), Color.ink.opacity(0.2)],
+                colors: [Color.inkLift.opacity(0.9), Color.ink.opacity(0.35)],
                 startPoint: .top,
                 endPoint: .bottom
             )
         )
+        .overlay(alignment: .top) {
+            LinearGradient(
+                colors: [Color.gold.opacity(0.15), Color.gold.opacity(0.85), Color.gold.opacity(0.15)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(height: 2)
+            .allowsHitTesting(false)
+        }
     }
 
     /// Decks grouped by class, filtered by the selected format.
@@ -1782,17 +1810,17 @@ private struct HoverHighlight: ViewModifier {
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(selected ? selectedFill : (hovering ? Color.hoverWash : Color.clear))
-                    .animation(.easeOut(duration: 0.16), value: hovering)
-                    .animation(.easeOut(duration: 0.16), value: selected)
+                    .animation(HearthChrome.motion == .off ? nil : .easeOut(duration: 0.16), value: hovering)
+                    .animation(HearthChrome.motion == .off ? nil : .easeOut(duration: 0.16), value: selected)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .strokeBorder(
                         selected ? selectedStroke : (hovering ? Color.line : Color.clear),
-                        lineWidth: 1
+                        lineWidth: selected ? 1.25 : 1
                     )
-                    .animation(.easeOut(duration: 0.16), value: hovering)
-                    .animation(.easeOut(duration: 0.16), value: selected)
+                    .animation(HearthChrome.motion == .off ? nil : .easeOut(duration: 0.16), value: hovering)
+                    .animation(HearthChrome.motion == .off ? nil : .easeOut(duration: 0.16), value: selected)
             )
             .onHover { hovering = $0 }
     }
@@ -1817,9 +1845,9 @@ private struct PanelSurface: ViewModifier {
                     .strokeBorder(
                         LinearGradient(
                             colors: [
-                                Color.gold.opacity(0.38),
+                                Color.gold.opacity(0.55),
                                 Color.line,
-                                Color.hearthText.opacity(0.05)
+                                Color.gold.opacity(0.22)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -1827,5 +1855,9 @@ private struct PanelSurface: ViewModifier {
                         lineWidth: 1
                     )
             )
+            .overlay {
+                HearthCornerMarks(tint: Color.gold.opacity(0.7), arm: 12)
+                    .padding(1)
+            }
     }
 }

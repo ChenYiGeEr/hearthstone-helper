@@ -382,8 +382,8 @@ private enum DeckRowMotion {
     static var travel: CGFloat {
         switch HearthChrome.motion {
         case .off: 0
-        case .light: 72
-        case .flashy: 160
+        case .light: 96
+        case .flashy: 188
         }
     }
 
@@ -626,8 +626,10 @@ private struct DeckLiveRow: View {
 
     var body: some View {
         OverlayCardRow(card: card, trailing: trailing, store: store, hoveredCardID: $hoveredCardID)
+            .scaleEffect(HearthChrome.motion == .flashy && launch == 0 && incoming ? 0.94 : 1, anchor: .leading)
             .offset(x: shownX)
             .animation(HearthChrome.motion == .off ? nil : DeckRowMotion.animation, value: x)
+            .animation(HearthChrome.motion == .off ? nil : DeckRowMotion.animation, value: launch)
             .onAppear { playShuffle() }
             .onChange(of: shuffleToken) { _, _ in playShuffle() }
             .onChange(of: incoming) { _, _ in playShuffle() }
@@ -940,14 +942,19 @@ private struct OverlayPanelShell<Content: View>: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
-                        colors: [accent.opacity(0.75), Color.lineSoft, accent.opacity(0.18)],
+                        colors: [accent.opacity(0.95), Color.gold.opacity(0.35), accent.opacity(0.2)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    lineWidth: 1
+                    lineWidth: 1.25
                 )
                 .allowsHitTesting(false)
         )
+        .overlay {
+            HearthCornerMarks(tint: accent, arm: 16)
+                .padding(2)
+                .allowsHitTesting(false)
+        }
         .overlay(alignment: .trailing) {
             hoverPreview
         }
@@ -1030,10 +1037,24 @@ private struct SideStatsBar: View {
         .font(.system(size: 11, weight: .bold).monospacedDigit())
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color.inkDeep.opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(Color.inkDeep.opacity(0.78), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(alignment: .top) {
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.gold.opacity(0.15), Color.gold, Color.gold.opacity(0.15)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: 1.5)
+                .padding(.horizontal, 18)
+                .padding(.top, 1)
+                .allowsHitTesting(false)
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.hearthText.opacity(0.12), lineWidth: 1)
+                .strokeBorder(Color.gold.opacity(0.28), lineWidth: 1)
         )
     }
 

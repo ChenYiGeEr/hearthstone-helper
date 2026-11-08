@@ -63,19 +63,19 @@ enum HearthChrome {
 
     @MainActor
     static func applyAppAppearance(_ choice: AppearanceChoice) {
+        // Prefer NSApplication.shared over NSApp: MatchStore.init can run
+        // before NSApp is non-nil during App construction.
+        let app = NSApplication.shared
         switch choice {
         case .light:
-            NSApp.appearance = NSAppearance(named: .aqua)
+            app.appearance = NSAppearance(named: .aqua)
+            isLight = true
         case .dark:
-            NSApp.appearance = NSAppearance(named: .darkAqua)
+            app.appearance = NSAppearance(named: .darkAqua)
+            isLight = false
         case .system:
-            NSApp.appearance = nil
-        }
-        let systemLight = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) != .darkAqua
-        switch choice {
-        case .light: isLight = true
-        case .dark: isLight = false
-        case .system: isLight = systemLight
+            app.appearance = nil
+            isLight = app.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) != .darkAqua
         }
     }
 

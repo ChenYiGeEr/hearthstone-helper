@@ -205,6 +205,10 @@ final class MatchStore {
         monitor.onStatus = { [weak self] status in
             guard let self else { return }
             self.status = status
+            // Hide or show the floaters on this same turn. .live follows the
+            // saved visibility prefs; every other status closes both panels
+            // without clearing those prefs.
+            OverlayWindowManager.shared.syncFromStore()
             if let record = status.match {
                 self.prefetchCardImages(for: record)
             }

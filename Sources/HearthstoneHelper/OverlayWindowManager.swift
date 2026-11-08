@@ -23,6 +23,12 @@ final class OverlayWindowManager {
     /// Bumps on every show/hide so a hide animation cannot order out a panel
     /// that has since been shown again.
     private var panelEpoch: [PanelID: Int] = [:]
+    /// What we last asked AppKit to do. Match-end hides use this so a panel
+    /// we opened is closed even if `isVisible` has not caught up yet.
+    private var panelWanted: [PanelID: Bool] = [:]
+    /// True while a hide animation is waiting to orderOut. A repeat hide must
+    /// not bump the epoch, or that orderOut would be dropped.
+    private var panelHiding: [PanelID: Bool] = [:]
 
     func install(store: MatchStore) {
         guard self.store == nil else { return }
@@ -37,6 +43,12 @@ final class OverlayWindowManager {
             content: PlayerOverlayPanel(store: store)
         )
         observeStore()
+        syncPanels()
+    }
+
+    /// Called when pipeline status changes, including from the log callback,
+    /// so a match-end hide does not wait on the next observation turn.
+    func syncFromStore() {
         syncPanels()
     }
 
@@ -150,15 +162,11 @@ final class OverlayWindowManager {
     private func syncPanels() {
         guard let store else { return }
 
-        // panels exist only while a match is actually being played; after the
-        // game ends they hide and the post-game review lives in the main window
-        let matchActive: Bool
-        switch store.status {
-        case .live:
-            matchActive = true
-        default:
-            matchActive = false
-        }
+        // Only .live keeps the floaters up. .finished, .loggedIn (等待对局),
+        // .notRunning, and .missingLogConfig all hide both panels. Visibility
+        // prefs are left as the user set them, so the next .live shows them
+        // again without another click.
+        let matchActive = overlaysAllowed(store.status)
 
         setPanel(opponentPanel, visible: matchActive && store.isOpponentOverlayVisible, id: .opponent)
         setPanel(playerPanel, visible: matchActive && store.isPlayerOverlayVisible, id: .player)
@@ -166,6 +174,16 @@ final class OverlayWindowManager {
         // pass-through is opt-in via the menu; interactive is the default
         opponentPanel?.ignoresMouseEvents = store.isOverlayPassthrough
         playerPanel?.ignoresMouseEvents = store.isOverlayPassthrough
+    }
+
+    /// In-match only. Every other pipeline state is the main, out-of-match UI.
+    private func overlaysAllowed(_ status: LogPipelineStatus) -> Bool {
+        switch status {
+        case .live:
+            return true
+        case .missingLogConfig, .notRunning, .loggedIn, .finished:
+            return false
+        }
     }
 
     func applyLayoutPreset(_ raw: Int) {
@@ -191,9 +209,18 @@ final class OverlayWindowManager {
 
     private func setPanel(_ panel: NSPanel?, visible: Bool, id: PanelID) {
         guard let panel else { return }
-        let epoch = (panelEpoch[id] ?? 0) + 1
-        panelEpoch[id] = epoch
+        let wanted = panelWanted[id] ?? false
         if visible {
+            // Already on screen. Don't bump the epoch: a new show animation
+            // on every log tick would cancel the hide that runs when the
+            // match ends.
+            if wanted, panel.isVisible, panelHiding[id] != true {
+                return
+            }
+            panelHiding[id] = false
+            panelWanted[id] = true
+            let epoch = (panelEpoch[id] ?? 0) + 1
+            panelEpoch[id] = epoch
             if !panel.isVisible {
                 panel.setFrame(storedFrame(for: id, default: panel.frame), display: false)
                 panel.alphaValue = 0
@@ -210,7 +237,19 @@ final class OverlayWindowManager {
                     panel.alphaValue = 1
                 }
             })
-        } else if panel.isVisible {
+        } else {
+            // A hide is already in flight. Leave its epoch so it can orderOut,
+            // unless a later show has taken a newer epoch.
+            if panelHiding[id] == true {
+                panelWanted[id] = false
+                return
+            }
+            guard wanted || panel.isVisible else { return }
+            panelWanted[id] = false
+            guard panel.isVisible else { return }
+            panelHiding[id] = true
+            let epoch = (panelEpoch[id] ?? 0) + 1
+            panelEpoch[id] = epoch
             NSAnimationContext.runAnimationGroup({ context in
                 context.allowsImplicitAnimation = true
                 context.duration = 0.22
@@ -219,6 +258,7 @@ final class OverlayWindowManager {
             }, completionHandler: {
                 Task { @MainActor in
                     guard self.panelEpoch[id] == epoch else { return }
+                    self.panelHiding[id] = false
                     panel.orderOut(nil)
                     panel.alphaValue = 1
                 }

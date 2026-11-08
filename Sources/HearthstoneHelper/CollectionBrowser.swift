@@ -417,8 +417,6 @@ private struct CollectionGrid: View {
                     )
                     .shadow(color: .black.opacity(0.6), radius: 18, y: 6)
                     .padding(hoverIsOnRightSide ? .leading : .trailing, 24)
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                    .animation(HearthChrome.Motion.optional(.spring(response: 0.3, dampingFraction: 1.0)), value: hoveredCardID)
                     .allowsHitTesting(false)
             }
         }

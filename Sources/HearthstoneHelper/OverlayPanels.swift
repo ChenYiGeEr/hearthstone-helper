@@ -121,7 +121,7 @@ struct OpponentOverlayPanel: View {
             }
         }
         .environment(\.hearthContext, context)
-        .preferredColorScheme((AppearanceChoice(rawValue: store.appearanceChoice) ?? .dark).preferredScheme)
+        .preferredColorScheme(context.isLight ? .light : .dark)
         .softAppear()
     }
 }
@@ -229,7 +229,7 @@ struct PlayerOverlayPanel: View {
             }
         }
         .environment(\.hearthContext, context)
-        .preferredColorScheme((AppearanceChoice(rawValue: store.appearanceChoice) ?? .dark).preferredScheme)
+        .preferredColorScheme(context.isLight ? .light : .dark)
         .softAppear()
     }
 
@@ -582,8 +582,6 @@ private struct OverlayPanelShell<Content: View>: View {
                 )
                 .shadow(color: .black.opacity(0.55), radius: 16, y: 6)
                 .padding(.trailing, 14)
-                .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                .animation(.spring(response: 0.3, dampingFraction: 1.0), value: hoveredCardID)
                 .allowsHitTesting(false)
         }
     }

@@ -618,24 +618,19 @@ struct DashboardView: View {
         Group {
             if showsSettings {
             HelperSettingsPane(store: store)
-                .transition(.opacity.combined(with: .offset(y: 12)))
         } else if showsCollection {
                 VStack(spacing: 0) {
                     RankTrajectoryCard(store: store)
                     CollectionBrowser(store: store, isStandard: isStandardFormat)
                 }
-                    .transition(.opacity.combined(with: .offset(y: 12)))
             } else if let imported = store.deckMarks.imported.first(where: { $0.id == selectedImportID }) {
                 importedDetail(imported)
                     .id(imported.id)
-                    .transition(.opacity.combined(with: .offset(x: 22)))
             } else if let deck = store.deckLibrary.decks.first(where: { $0.id == selectedDeckID }) {
                 deckDetail(deck)
                     .id(deck.id)
-                    .transition(.opacity.combined(with: .offset(x: 22)))
             } else {
                 emptyDetail
-                    .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -20,6 +20,9 @@ final class OverlayWindowManager {
     private var opponentPanel: NSPanel?
     private var playerPanel: NSPanel?
     private weak var store: MatchStore?
+    /// Bumps on every show/hide so a hide animation cannot order out a panel
+    /// that has since been shown again.
+    private var panelEpoch: [PanelID: Int] = [:]
 
     func install(store: MatchStore) {
         guard self.store == nil else { return }
@@ -178,31 +181,47 @@ final class OverlayWindowManager {
         let opponentOnLeft = preset != .swapped
         opponentPanel?.setFrame(opponentOnLeft ? left : right, display: true)
         playerPanel?.setFrame(opponentOnLeft ? right : left, display: true)
+        if let opponentPanel {
+            persistFrame(of: opponentPanel, id: .opponent)
+        }
+        if let playerPanel {
+            persistFrame(of: playerPanel, id: .player)
+        }
     }
 
     private func setPanel(_ panel: NSPanel?, visible: Bool, id: PanelID) {
         guard let panel else { return }
-        if visible, !panel.isVisible {
-            panel.setFrame(storedFrame(for: id, default: panel.frame), display: false)
-            panel.alphaValue = 0
-            // Apple fluid-interfaces: panel arrival is a moment (match start),
-            // so a slight bounce is earned; interruptible via alphaValue.
-            panel.orderFrontRegardless()
+        let epoch = (panelEpoch[id] ?? 0) + 1
+        panelEpoch[id] = epoch
+        if visible {
+            if !panel.isVisible {
+                panel.setFrame(storedFrame(for: id, default: panel.frame), display: false)
+                panel.alphaValue = 0
+                panel.orderFrontRegardless()
+            }
             NSAnimationContext.runAnimationGroup({ context in
                 context.allowsImplicitAnimation = true
                 context.duration = 0.35
                 context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1.05)
                 panel.animator().alphaValue = 1
+            }, completionHandler: {
+                Task { @MainActor in
+                    guard self.panelEpoch[id] == epoch else { return }
+                    panel.alphaValue = 1
+                }
             })
-        } else if !visible, panel.isVisible {
+        } else if panel.isVisible {
             NSAnimationContext.runAnimationGroup({ context in
                 context.allowsImplicitAnimation = true
                 context.duration = 0.22
                 context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 panel.animator().alphaValue = 0
             }, completionHandler: {
-                panel.orderOut(nil)
-                panel.alphaValue = 1
+                Task { @MainActor in
+                    guard self.panelEpoch[id] == epoch else { return }
+                    panel.orderOut(nil)
+                    panel.alphaValue = 1
+                }
             })
         }
     }
